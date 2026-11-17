@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loom — cloth, rope and jelly physics</title>
+<style>
+:root{--ink:#0C0E1C;--cream:#EDE6D6;--mute:#9C9EB8;--gold:#FFD166;--line:rgba(255,255,255,.14);--glass:rgba(12,14,28,.6)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--cream);overflow:hidden;
+  font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas.held{cursor:grabbing}
+canvas.cut{cursor:crosshair}
+.ui{transition:opacity .25s ease}
+body.bare .ui{opacity:0;pointer-events:none}
+.pill{position:fixed;top:16px;left:16px;z-index:5;font-size:13px;padding:8px 14px;border-radius:999px;background:var(--glass);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);color:#EDE6D6;text-decoration:none}
+.pill b{font-weight:600;color:var(--gold);margin-left:8px}
+.pill:hover{border-color:rgba(255,209,102,.5)}
+.scenes{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:4;display:flex;gap:2px;padding:4px;border-radius:999px;
+  background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);max-width:calc(100vw - 32px)}
+.scenes button{font:inherit;font-size:13px;color:var(--mute);background:none;border:0;border-radius:999px;padding:6px 13px;cursor:pointer;white-space:nowrap}
+.scenes button:hover{color:var(--cream)}
+.scenes button[aria-pressed=true]{background:var(--gold);color:#1A1606;font-weight:600}
+.scenes kbd{font:inherit;font-size:11px;opacity:.55;margin-right:6px}
+.panel{position:fixed;top:68px;right:16px;z-index:4;width:228px;padding:14px 14px 12px;border-radius:16px;background:var(--glass);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);font-size:13px}
+.panel label{display:grid;grid-template-columns:1fr auto;row-gap:2px;margin-bottom:10px;color:var(--mute)}
+.panel output{color:var(--cream)}
+.panel input[type=range]{grid-column:1/3;width:100%;margin:2px 0 0;accent-color:var(--gold);height:18px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.panel button{font:inherit;font-size:12.5px;color:var(--cream);background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:9px;
+  padding:7px 6px;cursor:pointer}
+.panel button:hover{background:rgba(255,255,255,.12)}
+.panel button[aria-pressed=true]{border-color:var(--gold);color:var(--gold);background:rgba(255,209,102,.1)}
+.panel .wide{width:100%}
+.help{position:fixed;left:16px;bottom:16px;z-index:4;padding:11px 14px;border-radius:14px;background:var(--glass);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);font-size:12.5px;line-height:1.65;color:var(--mute);
+  display:grid;grid-template-columns:auto auto;column-gap:14px}
+.help span:nth-child(odd){color:var(--cream)}
+.stats{position:fixed;right:16px;bottom:16px;z-index:4;font-size:12.5px;line-height:1.65;color:var(--mute);text-align:right;
+  padding:11px 14px;border-radius:14px;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line)}
+.stats b{color:var(--cream);font-weight:500}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (max-width:820px){.help{display:none}.panel{width:190px}.scenes{top:60px}.panel{top:112px}}
+</style>
+<script>if(/[?&]embed\b/.test(location.search))document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('bare');});</script>
+</head>
+<body>
+<canvas id="c" aria-label="Loom physics sandbox"></canvas>
+
+<a class="pill ui" href="../index.html">← Showcase<b>Loom</b></a>
+
+<nav class="scenes ui" aria-label="Scenes">
+  <button data-scene="curtain"><kbd>1</kbd>Curtain</button>
+  <button data-scene="flag"><kbd>2</kbd>Flag</button>
+  <button data-scene="net"><kbd>3</kbd>Net and spheres</button>
+  <button data-scene="jelly"><kbd>4</kbd>Jelly</button>
+  <button data-scene="ropes"><kbd>5</kbd>Ropes</button>
+</nav>
+
+<aside class="panel ui" aria-label="Settings">
+  <label><span>Wind</span><output id="oWind"></output><input id="wind" type="range" min="0" max="100" step="1"></label>
+  <label><span>Wind direction</span><output id="oDir"></output><input id="dir" type="range" min="-180" max="180" step="5"></label>
+  <label><span>Gravity</span><output id="oGrav"></output><input id="grav" type="range" min="0" max="2" step="0.05"></label>
+  <label><span>Tear strength</span><output id="oTear"></output><input id="tear" type="range" min="1.3" max="6" step="0.1"></label>
+  <div class="row">
+    <button id="bSlow" aria-pressed="false">Slow motion</button>
+    <button id="bWire" aria-pressed="false">Wireframe</button>
+  </div>
+  <div class="row">
+    <button id="bAuto" aria-pressed="true">Auto demo</button>
+    <button id="bBall">Drop a ball</button>
+  </div>
+  <button id="bReset" class="wide">Reset scene</button>
+</aside>
+
+<div class="help ui">
+  <span>Drag</span><span>pull the fabric</span>
+  <span>Right-drag or Shift-drag</span><span>slice it</span>
+  <span>Click a pin</span><span>release it</span>
+  <span>1 to 5</span><span>change scene</span>
+  <span>R, S, W, B</span><span>reset, slow motion, wireframe, ball</span>
+  <span>Space, A, H</span><span>pause, auto demo, hide controls</span>
+</div>
+
+<div class="stats ui">
+  <div><b id="sP">0</b> particles</div>
+  <div><b id="sC">0</b> threads holding</div>
+  <div><b id="sT">0</b> torn</div>
+  <div><b id="sF">60</b> frames a second</div>
+</div>
+
+<script>
+//<core>
+// Loom physics core: no DOM, runs headless. Verlet integration, 360 Hz substeps,
+// Gauss-Seidel distance constraints that break when over-stretched.
+function createSim() {
+  'use strict';
+  const MAXP = 9600, MAXC = 46000, MAXB = 16, MAXG = 256;
+  const G = 1800, H = 1 / 360, H2 = H * H, KN = 150, KD = 10, VMAX = 36;
+  const F = n => new Float64Array(n), I = n => new Int32Array(n), U = n => new Uint8Array(n);
+  const px = F(MAXP), py = F(MAXP), pz = F(MAXP), ox = F(MAXP), oy = F(MAXP), oz = F(MAXP);
+  const hx = F(MAXP), hy = F(MAXP), hz = F(MAXP), pm = F(MAXP), im = F(MAXP), prad = F(MAXP);
+  const wx = F(MAXP), wy = F(MAXP), wz = F(MAXP), ty = F(MAXP);
+  const pin = U(MAXP), pkin = U(MAXP), pcloth = U(MAXP), pbody = new Int16Array(MAXP);
+  const ca = I(MAXC), cb = I(MAXC), oa = I(MAXC), ob = I(MAXC), cq1 = I(MAXC), cq2 = I(MAXC), broken = I(MAXC);
+  const crest = F(MAXC), cstiff = F(MAXC), cth = F(MAXC), calive = U(MAXC), ckind = U(MAXC);
+  const bx = F(MAXB), by = F(MAXB), bz = F(MAXB), box = F(MAXB), boy = F(MAXB), boz = F(MAXB), br = F(MAXB), bim = F(MAXB), bcol = U(MAXB);
+  const S = {
+    np: 0, nc: 0, nb: 0, nbroken: 0, cuts: 0, time: 0, iters: 2, gust: 1, spawned: 0, ballSeq: 0, fixed: 0,
+    cloths: [], bodies: [], ropes: [], pegs: [], scene: null,
+    params: { wind: 0, windDir: 0, gravity: 1, tear: 2.5 },
+    px, py, pz, ox, oy, oz, im, pm, prad, pin, pkin, pbody, pcloth,
+    ca, cb, oa, ob, crest, calive, ckind, broken, bx, by, bz, br, bcol, H
+  };
+  let seed = 1;
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const grab = { active: false, n: 0, idx: I(MAXG), gx: F(MAXG), gy: F(MAXG), gz: F(MAXG), sx0: 0, sy0: 0, dx: 0, dy: 0, ball: -1, bx0: 0, by0: 0, bz0: 0 };
+  const tmp = [0, 0, 0];
+
+  function clear() {
+    S.np = S.nc = S.nb = S.nbroken = S.cuts = S.spawned = S.ballSeq = 0; S.time = 0;
+    S.cloths.length = S.bodies.length = S.ropes.length = S.pegs.length = 0;
+    grab.active = false; grab.n = 0; grab.ball = -1;
+  }
+  function addP(x, y, z, m, rad) {
+    const i = S.np++;
+    px[i] = ox[i] = hx[i] = x; py[i] = oy[i] = hy[i] = y; pz[i] = oz[i] = hz[i] = z;
+    pm[i] = im[i] = m; prad[i] = rad || 0; pin[i] = 0; pkin[i] = 0; pcloth[i] = 0; pbody[i] = -1;
+    wx[i] = wy[i] = wz[i] = 0;
+    return i;
+  }
+  function addC(a, b, kind, stiff, rest) {
+    const k = S.nc++;
+    if (rest === undefined) { const dx = px[b] - px[a], dy = py[b] - py[a], dz = pz[b] - pz[a]; rest = Math.sqrt(dx * dx + dy * dy + dz * dz); }
+    ca[k] = a; cb[k] = b; ckind[k] = kind; cstiff[k] = stiff; crest[k] = rest; calive[k] = 1;
+    oa[k] = ob[k] = cq1[k] = cq2[k] = -1; cth[k] = 0.78 + 0.44 * rnd();
+    return k;
+  }
+  function mass(i) { im[i] = (pin[i] || pkin[i]) ? 0 : pm[i]; }
+  function setPin(i, v) { pin[i] = v ? 1 : 0; mass(i); if (v) { ox[i] = px[i]; oy[i] = py[i]; oz[i] = pz[i]; } }
+  function breakC(k) {
+    if (!calive[k]) return;
+    calive[k] = 0; S.cuts++;
+    if (ckind[k] !== 1) broken[S.nbroken++] = k;
+    const q1 = cq1[k], q2 = cq2[k];
+    if (q1 >= 0) calive[q1] = 0;
+    if (q2 >= 0) calive[q2] = 0;
+  }
+
+  // ---- builders ---------------------------------------------------------
+  function addCloth(cols, rows, rest, posFn, toneFn, shear) {
+    const p0 = S.np, qc = cols - 1, qr = rows - 1;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { posFn(c, r, tmp); pcloth[addP(tmp[0], tmp[1], tmp[2], 1, 0)] = 1; }
+    const h0 = S.nc;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < qc; c++) {
+      const a = p0 + r * cols + c, k = addC(a, a + 1, 0, 1, rest);
+      oa[k] = c > 0 ? a - 1 : -1; ob[k] = c < qc - 1 ? a + 2 : -1;
+    }
+    const v0 = S.nc;
+    for (let r = 0; r < qr; r++) for (let c = 0; c < cols; c++) {
+      const a = p0 + r * cols + c, k = addC(a, a + cols, 0, 1, rest);
+      oa[k] = r > 0 ? a - cols : -1; ob[k] = r < qr - 1 ? a + 2 * cols : -1;
+    }
+    const s0 = S.nc, diag = rest * Math.SQRT2;
+    for (let r = 0; r < qr; r++) for (let c = 0; c < qc; c++) {
+      const A = p0 + r * cols + c;
+      if ((r + c) & 1) addC(A + 1, A + cols, 1, shear, diag); else addC(A, A + cols + 1, 1, shear, diag);
+    }
+    // a cut thread also frees the diagonals of the two cells beside it
+    for (let r = 0; r < rows; r++) for (let c = 0; c < qc; c++) {
+      const k = h0 + r * qc + c;
+      if (r > 0) cq1[k] = s0 + (r - 1) * qc + c;
+      if (r < qr) cq2[k] = s0 + r * qc + c;
+    }
+    for (let r = 0; r < qr; r++) for (let c = 0; c < cols; c++) {
+      const k = v0 + r * cols + c;
+      if (c > 0) cq1[k] = s0 + r * qc + c - 1;
+      if (c < qc) cq2[k] = s0 + r * qc + c;
+    }
+    const nq = qc * qr, tone = new Uint8Array(nq);
+    for (let r = 0; r < qr; r++) for (let c = 0; c < qc; c++) tone[r * qc + c] = toneFn(c, r, qc, qr);
+    const cl = { cols, rows, p0, h0, v0, s0, rest, tone, nq, qn: new Float32Array(nq * 3), qa: new Uint8Array(nq) };
+    S.cloths.push(cl);
+    return cl;
+  }
+  function addRope(pts, invM, rad, style) {
+    const p0 = S.np, n = pts.length / 3;
+    for (let i = 0; i < n; i++) addP(pts[3 * i], pts[3 * i + 1], pts[3 * i + 2], invM, rad);
+    const c0 = S.nc;
+    for (let i = 0; i < n - 1; i++) addC(p0 + i, p0 + i + 1, 2, 1);
+    const rp = { p0, n, c0, style, bob: -1, bobR: 0, tint: 0 };
+    S.ropes.push(rp);
+    return rp;
+  }
+  function polyArea(ring) {
+    let A = 0; const n = ring.length;
+    for (let i = 0; i < n; i++) { const p = ring[i], q = ring[(i + 1) % n]; A += px[p] * py[q] - px[q] * py[p]; }
+    return A * 0.5;
+  }
+  function finishBody(ring, center, color, skin) {
+    const id = S.bodies.length, col = center >= 0 ? new Int32Array(ring.length + 1) : new Int32Array(ring.length);
+    col.set(ring); if (center >= 0) col[ring.length] = center;
+    let cx = 0, cy = 0; for (let i = 0; i < ring.length; i++) { cx += px[ring[i]]; cy += py[ring[i]]; }
+    cx /= ring.length; cy /= ring.length;
+    const b = { id, ring, center, col, color, skin, area0: Math.abs(polyArea(ring)), a0: Math.atan2(py[ring[0]] - cy, px[ring[0]] - cx), gain: 0.07, x0: 0, y0: 0, x1: 0, y1: 0, first: 0, last: 0 };
+    S.bodies.push(b);
+    return b;
+  }
+  function addBlob(cx, cy, R, n, color) {
+    const id = S.bodies.length, ring = new Int32Array(n), sp = 2 * Math.PI * R / n, first = S.np;
+    for (let i = 0; i < n; i++) { const a = i / n * 2 * Math.PI; ring[i] = addP(cx + Math.cos(a) * R, cy + Math.sin(a) * R, 0, 1, sp * 0.56); pbody[ring[i]] = id; }
+    const c = addP(cx, cy, 0, 1, R * 0.4); pbody[c] = id;
+    const half = n >> 1;
+    for (let i = 0; i < n; i++) {
+      addC(ring[i], ring[(i + 1) % n], 3, 1);
+      addC(ring[i], ring[(i + 2) % n], 3, 0.03);
+      addC(ring[i], c, 3, 0.015);
+      if (i < half) addC(ring[i], ring[i + half], 3, 0.004);
+    }
+    const b = finishBody(ring, c, color, sp * 1.1); b.first = first; b.last = S.np;
+    return b;
+  }
+  function addBlock(x0, y0, nx, ny, s, color) {
+    const id = S.bodies.length, first = S.np, at = (c, r) => first + r * nx + c;
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+      const edge = r === 0 || c === 0 || r === ny - 1 || c === nx - 1;
+      pbody[addP(x0 + c * s, y0 + r * s, 0, 1, edge ? s * 0.52 : 0)] = id;
+    }
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+      if (c < nx - 1) addC(at(c, r), at(c + 1, r), 3, 0.3);
+      if (r < ny - 1) addC(at(c, r), at(c, r + 1), 3, 0.3);
+      if (c < nx - 1 && r < ny - 1) { addC(at(c, r), at(c + 1, r + 1), 3, 0.22); addC(at(c + 1, r), at(c, r + 1), 3, 0.22); }
+    }
+    const hull = [];
+    for (let c = 0; c < nx; c++) hull.push(at(c, 0));
+    for (let r = 1; r < ny; r++) hull.push(at(nx - 1, r));
+    for (let c = nx - 2; c >= 0; c--) hull.push(at(c, ny - 1));
+    for (let r = ny - 2; r > 0; r--) hull.push(at(0, r));
+    const b = finishBody(Int32Array.from(hull), -1, color, s * 1.0); b.first = first; b.last = S.np; b.gain = 0.16;
+    return b;
+  }
+  function spawnBall(x, y, z, r, invM) {
+    let b;
+    if (S.nb < MAXB) b = S.nb++; else { b = S.ballSeq % MAXB; if (b === grab.ball) b = (b + 1) % MAXB; }
+    bx[b] = box[b] = x; by[b] = boy[b] = y; bz[b] = boz[b] = z; br[b] = r; bim[b] = invM; bcol[b] = S.ballSeq % 5;
+    S.ballSeq++;
+    return b;
+  }
+
+  // ---- scenes -----------------------------------------------------------
+  function baseScene(WW, WH, o) {
+    const tilt = o.tilt || 0;
+    return Object.assign({
+      W: WW, Hh: WH, tilt, cT: Math.cos(tilt), sT: Math.sin(tilt), pivotY: WH / 2, floorY: Infinity, killY: WH + 520,
+      wallL: -Infinity, wallR: Infinity, damp: 0.9985, friction: 0.6, grabR: 24, zBias: -0.22, ambient: null, decor: {},
+      rect: { x0: 0, y0: 0, x1: WW, y1: WH }, defaults: { wind: 0, windDir: 0, gravity: 1, tear: 2.5 }, warm: 0,
+      palette: [[233, 224, 204], [71, 86, 184], [255, 209, 102]]
+    }, o);
+  }
+  const SCENES = {
+    curtain(WW, WH) {
+      const yo = (WH - 900) / 2, cx = WW / 2, r = 11, rows = 56;
+      const spans = Math.max(12, Math.min(27, Math.floor(WW * 0.62 / (3 * r)))), cols = spans * 4 + 1;
+      const wdt = spans * 3 * r, x0 = cx - wdt / 2, rodY = yo + 108, d = 0.6614 * r, zig = [0, d, 0, -d];
+      const cl = addCloth(cols, rows, r, (c, rr, o) => { o[0] = x0 + c * 0.75 * r; o[1] = rodY + rr * r; o[2] = zig[c & 3]; },
+        (c, rr, qc, qr) => { if (rr >= qr - 2) return 1; if (rr === qr - 3) return 2; const m = c % 16; return m < 9 ? 0 : m === 12 ? 2 : 1; }, 0.5);
+      for (let c = 0; c < cols; c += 4) setPin(cl.p0 + c, 1);
+      for (let rr = 1; rr < rows; rr++) for (let c = 0; c < cols; c++) oz[cl.p0 + rr * cols + c] += 0.5 * (rr / rows) * (1 + Math.sin(c * 0.11));
+      return baseScene(WW, WH, { rect: { x0, y0: rodY, x1: x0 + wdt, y1: rodY + (rows - 1) * r }, warm: 300,
+        defaults: { wind: 24, windDir: 0, gravity: 1, tear: 2.4 }, decor: { rod: { x0: x0 - 46, x1: x0 + wdt + 46, y: rodY - 9 } } });
+    },
+    flag(WW, WH) {
+      const yo = (WH - 900) / 2, cx = WW / 2, r = 10, cols = 66, rows = 42, poleX = Math.max(90, cx - 420), top = yo + 170;
+      const cl = addCloth(cols, rows, r, (c, rr, o) => { o[0] = poleX + c * r; o[1] = top + rr * r; o[2] = 1.5 * Math.sin(c * 0.6 + rr * 0.35); },
+        (c, rr, qc, qr) => { const dx = c - qc * 0.42, dy = rr - qr * 0.5, rad = Math.sqrt(dx * dx + dy * dy), R = qr * 0.27;
+          return rad < R ? 2 : rad < R + 1.7 ? 0 : (rr < 5 || rr >= qr - 5) ? 0 : 1; }, 0.8);
+      for (let rr = 0; rr < rows; rr++) if (rr % 3 === 0 || rr === rows - 1) setPin(cl.p0 + rr * cols, 1);
+      return baseScene(WW, WH, { rect: { x0: poleX, y0: top, x1: poleX + (cols - 1) * r, y1: top + (rows - 1) * r }, warm: 360, damp: 0.998, zBias: -0.06,
+        defaults: { wind: 70, windDir: 0, gravity: 1, tear: 2.8 }, decor: { pole: { x: poleX - 7, y0: top - 54 } } });
+    },
+    net(WW, WH) {
+      const yo = (WH - 900) / 2, cx = WW / 2, r = 11, cols = 64, rows = 52, y0 = yo + 400, floorY = yo + 770, tilt = 52 * Math.PI / 180;
+      const cl = addCloth(cols, rows, r, (c, rr, o) => { o[0] = cx + (c - (cols - 1) / 2) * r; o[1] = y0; o[2] = ((rows - 1) / 2 - rr) * r; },
+        (c, rr, qc, qr) => (c < 2 || rr < 2 || c >= qc - 2 || rr >= qr - 2) ? 2 : (((c - 2) >> 2) + ((rr - 2) >> 2)) & 1, 0.5);
+      const posts = [];
+      for (const [c0, r0] of [[0, 0], [cols - 3, 0], [0, rows - 3], [cols - 3, rows - 3]]) {
+        for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) setPin(cl.p0 + (r0 + a) * cols + c0 + b, 1);
+        const m = cl.p0 + (r0 + 1) * cols + c0 + 1; posts.push({ x: px[m], y: y0, z: pz[m] });
+      }
+      const hw = (cols - 1) * r / 2, hz = (rows - 1) * r / 2 * Math.sin(tilt);
+      const sc = baseScene(WW, WH, { tilt, pivotY: y0, floorY, friction: 0.5, rect: { x0: cx - hw, y0: y0 - hz, x1: cx + hw, y1: y0 + hz },
+        palette: [[233, 224, 204], [73, 170, 160], [255, 209, 102]], defaults: { wind: 0, windDir: -90, gravity: 1, tear: 3.2 }, decor: { posts, grid: true } });
+      sc.ambient = () => {
+        if (S.spawned < 6 && S.time > 0.5 + S.spawned * 1.5) { spawnBall(cx + (rnd() - 0.5) * 320, yo - 460, (rnd() - 0.5) * 220, 32 + rnd() * 12, 1 / 34); S.spawned++; }
+      };
+      sc.dropBall = () => spawnBall(cx + (rnd() - 0.5) * 320, yo - 460, (rnd() - 0.5) * 220, 32 + rnd() * 12, 1 / 34);
+      return sc;
+    },
+    jelly(WW, WH) {
+      const yo = (WH - 900) / 2, cx = WW / 2, hw = Math.min(540, WW / 2 - 40), floorY = yo + 836;
+      S.pegs.push({ x: cx - hw * 0.52, y: yo + 610, r: 42 }, { x: cx + hw * 0.52, y: yo + 610, r: 42 }, { x: cx, y: yo + 440, r: 52 });
+      addBlob(cx - hw * 0.55, yo + 150, 72, 22, 0);
+      addBlob(cx + hw * 0.12, yo + 60, 58, 18, 1);
+      addBlob(cx + hw * 0.62, yo + 180, 76, 22, 2);
+      addBlock(cx - hw * 0.3, yo - 200, 5, 5, 27, 3);
+      addBlob(cx + hw * 0.36, yo - 250, 62, 20, 4);
+      addBlock(cx - hw * 0.78, yo - 430, 4, 4, 30, 1);
+      addBlob(cx - hw * 0.05, yo - 540, 66, 20, 0);
+      const sc = baseScene(WW, WH, { floorY, wallL: cx - hw, wallR: cx + hw, damp: 0.9993, friction: 0.9, grabR: 34, zBias: 0,
+        rect: { x0: cx - hw, y0: yo + 60, x1: cx + hw, y1: floorY }, defaults: { wind: 0, windDir: 0, gravity: 1, tear: 2.5 }, decor: { box: true } });
+      sc.dropBall = () => spawnBall(cx + (rnd() - 0.5) * hw, yo - 80, 0, 22 + rnd() * 8, 1 / 10);
+      return sc;
+    },
+    ropes(WW, WH) {
+      const yo = (WH - 900) / 2, cx = WW / 2, half = Math.min(WW * 0.38, 620), beamY = yo + 84, N = 13, ang = 0.5;
+      for (let k = 0; k < N; k++) {
+        const x = cx - half + (k + 0.5) / N * 2 * half, w = 2 * Math.PI * (14 + k) / 40, L = G / (w * w);
+        const n = Math.max(4, Math.round(L / 20)), seg = L / n, pts = [];
+        for (let j = 0; j <= n; j++) pts.push(x - Math.sin(ang) * seg * j, beamY + Math.cos(ang) * seg * j, 0);
+        const rp = addRope(pts, 0.5, 3, 'chain'); setPin(rp.p0, 1);
+        rp.bob = rp.p0 + n; rp.bobR = 15; rp.tint = k; pm[rp.bob] = 0.1; mass(rp.bob); prad[rp.bob] = 15;
+      }
+      const bw = Math.min(WW * 0.34, 560), by0 = yo + 640, n = Math.round(2 * bw / 18), sag = 2 * bw * 0.0866, pts = [];
+      for (let j = 0; j <= n; j++) { const t = j / n; pts.push(cx - bw + 2 * bw * t, by0 + sag * 4 * t * (1 - t), 0); }
+      const bridge = addRope(pts, 0.5, 5, 'bridge'); setPin(bridge.p0, 1); setPin(bridge.p0 + n, 1);
+      const floorY = yo + 850;
+      const sc = baseScene(WW, WH, { floorY, damp: 0.99996, friction: 0.97, grabR: 1, zBias: 0,
+        rect: { x0: cx - half, y0: beamY, x1: cx + half, y1: by0 + sag }, defaults: { wind: 4, windDir: 0, gravity: 1, tear: 3 },
+        decor: { beam: { x0: cx - half - 30, x1: cx + half + 30, y: beamY }, bridge: { x0: cx - bw, x1: cx + bw, y: by0, sag } } });
+      sc.dropBall = () => spawnBall(cx + (rnd() - 0.5) * bw * 1.2, yo + 505, 0, 20 + rnd() * 7, 1 / 8);
+      sc.ambient = () => { if (S.spawned < 4 && S.time > 2.5 + S.spawned * 3.4) { sc.dropBall(); S.spawned++; } };
+      return sc;
+    }
+  };
+
+  // ---- per-frame forces: cloth normals and aerodynamic wind ------------------
+  function turb(u, v, t) {
+    return 0.6 * Math.sin(u * 0.011 - t * 3.3 + 1.7 * Math.sin(v * 0.009 + t * 0.8)) + 0.4 * Math.sin(u * 0.026 - t * 5.6 + v * 0.014);
+  }
+  function gustAt(t) { return 0.62 + 0.28 * Math.sin(t * 0.55 + 0.9) * Math.sin(t * 0.21 + 1.3) + 0.1 * Math.sin(t * 1.9 + 0.4); }
+  function forces() {
+    const P = S.params, t = S.time, sc = S.scene, np = S.np;
+    const gust = gustAt(t), a = P.windDir * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), W0 = P.wind * gust;
+    S.gust = gust;
+    const drx = KD * W0 * dx, dry = KD * W0 * dy;
+    for (let i = 0; i < np; i++) { const m = pm[i] < 1 ? pm[i] : 1; wx[i] = drx * m; wy[i] = dry * m; wz[i] = 0; }
+    const wvx = W0 * dx, wvy = W0 * dy, zb = sc.zBias;
+    for (let ci = 0; ci < S.cloths.length; ci++) {
+      const cl = S.cloths[ci], cols = cl.cols, qc = cols - 1, qr = cl.rows - 1, p0 = cl.p0, h0 = cl.h0, v0 = cl.v0, qn = cl.qn, qa = cl.qa;
+      for (let r = 0; r < qr; r++) for (let c = 0; c < qc; c++) {
+        const q = r * qc + c, A = p0 + r * cols + c, B = A + 1, D = A + cols, C = D + 1;
+        const al = ((calive[h0 + q] & calive[v0 + r * cols + c]) | ((calive[v0 + r * cols + c + 1] & calive[h0 + q + qc]) << 1));
+        qa[q] = al;
+        const e1x = px[C] - px[A], e1y = py[C] - py[A], e1z = pz[C] - pz[A], e2x = px[D] - px[B], e2y = py[D] - py[B], e2z = pz[D] - pz[B];
+        let nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 1e-9) { nx /= len; ny /= len; nz /= len; } else { nx = 0; ny = 0; nz = -1; }
+        const q3 = q * 3; qn[q3] = nx; qn[q3 + 1] = ny; qn[q3 + 2] = nz;
+        if (al && W0 > 0) {
+          const mx = (px[A] + px[C]) * 0.5, my = (py[A] + py[C]) * 0.5;
+          const wvz = W0 * (zb + 0.9 * turb(mx * dx + my * dy, my * dx - mx * dy, t));
+          const f = (wvx * nx + wvy * ny + wvz * nz) * KN * 0.25, fx = f * nx, fy = f * ny, fz = f * nz;
+          wx[A] += fx; wy[A] += fy; wz[A] += fz; wx[B] += fx; wy[B] += fy; wz[B] += fz;
+          wx[C] += fx; wy[C] += fy; wz[C] += fz; wx[D] += fx; wy[D] += fy; wz[D] += fz;
+        }
+      }
+    }
+  }
+
+  // ---- solver -----------------------------------------------------------
+  function solve(rev) {
+    const nc = S.nc, tk = S.params.tear - 1;
+    for (let n = 0; n < nc; n++) {
+      const k = rev ? nc - 1 - n : n;
+      if (!calive[k]) continue;
+      const a = ca[k], b = cb[k], w1 = im[a], w2 = im[b], w = w1 + w2;
+      if (w === 0) continue;
+      const dx = px[b] - px[a], dy = py[b] - py[a], dz = pz[b] - pz[a], d = Math.sqrt(dx * dx + dy * dy + dz * dz), rest = crest[k];
+      if (ckind[k] < 3 && d > rest * (1 + tk * cth[k])) { breakC(k); continue; }
+      if (d < 1e-9) continue;
+      const f = (d - rest) / d * cstiff[k] / w;
+      px[a] += dx * f * w1; py[a] += dy * f * w1; pz[a] += dz * f * w1;
+      px[b] -= dx * f * w2; py[b] -= dy * f * w2; pz[b] -= dz * f * w2;
+    }
+  }
+  function pressure(b) {
+    const ring = b.ring, n = ring.length;
+    let A = 0, per = 0;
+    for (let i = 0; i < n; i++) {
+      const p = ring[i], q = ring[(i + 1) % n], ex = px[q] - px[p], ey = py[q] - py[p];
+      A += px[p] * py[q] - px[q] * py[p]; per += Math.sqrt(ex * ex + ey * ey);
+    }
+    A *= 0.5;
+    const sgn = A < 0 ? -1 : 1;
+    let e = (b.area0 - A * sgn) / (per + 1e-6) * b.gain;
+    if (e > 2.5) e = 2.5; else if (e < -2.5) e = -2.5;
+    e *= sgn;
+    for (let i = 0; i < n; i++) {
+      const p = ring[i];
+      if (im[p] === 0) continue;
+      const a = ring[(i + n - 1) % n], c = ring[(i + 1) % n];
+      let nx = py[c] - py[a], ny = -(px[c] - px[a]);
+      const l = Math.sqrt(nx * nx + ny * ny);
+      if (l < 1e-9) continue;
+      px[p] += nx / l * e; py[p] += ny / l * e;
+    }
+  }
+  function bodyCollide() {
+    const B = S.bodies, nB = B.length;
+    for (let i = 0; i < nB; i++) {
+      const b = B[i], col = b.col; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let j = 0; j < col.length; j++) { const p = col[j], r = prad[p]; if (px[p] - r < x0) x0 = px[p] - r; if (px[p] + r > x1) x1 = px[p] + r; if (py[p] - r < y0) y0 = py[p] - r; if (py[p] + r > y1) y1 = py[p] + r; }
+      b.x0 = x0; b.y0 = y0; b.x1 = x1; b.y1 = y1;
+    }
+    for (let i = 0; i < nB; i++) for (let j = i + 1; j < nB; j++) {
+      const a = B[i], b = B[j];
+      if (a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0) continue;
+      const ac = a.col, bc = b.col;
+      for (let u = 0; u < ac.length; u++) {
+        const p = ac[u], rp = prad[p], x = px[p], y = py[p];
+        if (x + rp < b.x0 || x - rp > b.x1 || y + rp < b.y0 || y - rp > b.y1) continue;
+        for (let v = 0; v < bc.length; v++) {
+          const q = bc[v], rr = rp + prad[q], dx = px[q] - px[p], dy = py[q] - py[p], d2 = dx * dx + dy * dy;
+          if (d2 >= rr * rr || d2 < 1e-12) continue;
+          const w1 = im[p], w2 = im[q], w = w1 + w2; if (w === 0) continue;
+          const d = Math.sqrt(d2), f = (rr - d) / d / w;
+          px[p] -= dx * f * w1; py[p] -= dy * f * w1; px[q] += dx * f * w2; py[q] += dy * f * w2;
+        }
+      }
+    }
+  }
+  function pegCollide() {
+    const pegs = S.pegs, B = S.bodies;
+    for (let g = 0; g < pegs.length; g++) {
+      const pg = pegs[g];
+      for (let i = 0; i < B.length; i++) {
+        const b = B[i];
+        if (b.x1 < pg.x - pg.r || b.x0 > pg.x + pg.r || b.y1 < pg.y - pg.r || b.y0 > pg.y + pg.r) continue;
+        const col = b.col;
+        for (let j = 0; j < col.length; j++) {
+          const p = col[j]; if (im[p] === 0) continue;
+          const rr = pg.r + prad[p], dx = px[p] - pg.x, dy = py[p] - pg.y, d2 = dx * dx + dy * dy;
+          if (d2 >= rr * rr || d2 < 1e-12) continue;
+          const d = Math.sqrt(d2), f = (rr - d) / d;
+          px[p] += dx * f; py[p] += dy * f;
+        }
+      }
+      for (let b = 0; b < S.nb; b++) {
+        if (b === grab.ball) continue;
+        const rr = pg.r + br[b], dx = bx[b] - pg.x, dy = by[b] - pg.y, d2 = dx * dx + dy * dy;
+        if (d2 >= rr * rr || d2 < 1e-12) continue;
+        const d = Math.sqrt(d2), f = (rr - d) / d;
+        bx[b] += dx * f; by[b] += dy * f;
+      }
+    }
+  }
+  function stepBalls(g) {
+    const sc = S.scene, nb = S.nb, np = S.np, fl = sc.floorY;
+    for (let b = 0; b < nb; b++) {
+      if (b === grab.ball) continue;
+      let vx = (bx[b] - box[b]) * 0.9994, vy = (by[b] - boy[b]) * 0.9994, vz = (bz[b] - boz[b]) * 0.9994;
+      const v2 = vx * vx + vy * vy + vz * vz;
+      if (v2 > VMAX * VMAX) { const s = VMAX / Math.sqrt(v2); vx *= s; vy *= s; vz *= s; }
+      box[b] = bx[b]; boy[b] = by[b]; boz[b] = bz[b];
+      bx[b] += vx; by[b] += vy + g; bz[b] += vz;
+    }
+    for (let b = 0; b < nb; b++) {
+      const R = br[b], RR = R + 16, wb = b === grab.ball ? 0 : bim[b];
+      let X = bx[b], Y = by[b], Z = bz[b];
+      for (let i = 0; i < np; i++) {
+        const dx = px[i] - X; if (dx > RR || dx < -RR) continue;
+        const dy = py[i] - Y; if (dy > RR || dy < -RR) continue;
+        const dz = pz[i] - Z, rr = R + prad[i], d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= rr * rr || d2 < 1e-12) continue;
+        const wi = im[i], w = wi + wb; if (w === 0) continue;
+        const d = Math.sqrt(d2), f = (rr - d) / d / w;
+        px[i] += dx * f * wi; py[i] += dy * f * wi; pz[i] += dz * f * wi;
+        X -= dx * f * wb; Y -= dy * f * wb; Z -= dz * f * wb;
+      }
+      bx[b] = X; by[b] = Y; bz[b] = Z;
+    }
+    for (let a = 0; a < nb; a++) for (let b = a + 1; b < nb; b++) {
+      const rr = br[a] + br[b], dx = bx[b] - bx[a], dy = by[b] - by[a], dz = bz[b] - bz[a], d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= rr * rr || d2 < 1e-12) continue;
+      const w1 = a === grab.ball ? 0 : bim[a], w2 = b === grab.ball ? 0 : bim[b], w = w1 + w2; if (w === 0) continue;
+      const d = Math.sqrt(d2), f = (rr - d) / d / w;
+      bx[a] -= dx * f * w1; by[a] -= dy * f * w1; bz[a] -= dz * f * w1;
+      bx[b] += dx * f * w2; by[b] += dy * f * w2; bz[b] += dz * f * w2;
+    }
+    for (let b = 0; b < nb; b++) {
+      if (b === grab.ball) continue;
+      const R = br[b];
+      if (by[b] > fl - R) {
+        const vy = by[b] - boy[b];
+        by[b] = fl - R; boy[b] = vy > 0.35 ? by[b] + vy * 0.45 : by[b];
+        box[b] = bx[b] - (bx[b] - box[b]) * 0.992; boz[b] = bz[b] - (bz[b] - boz[b]) * 0.992;
+      }
+      if (bx[b] < sc.wallL + R) { const v = bx[b] - box[b]; bx[b] = sc.wallL + R; box[b] = bx[b] + v * 0.5; }
+      if (bx[b] > sc.wallR - R) { const v = bx[b] - box[b]; bx[b] = sc.wallR - R; box[b] = bx[b] + v * 0.5; }
+      if (by[b] > sc.killY) { by[b] = boy[b] = sc.killY; box[b] = bx[b]; boz[b] = bz[b]; }
+      if (by[b] < -1600) by[b] = boy[b] = -1600;
+      if (bx[b] < -900) bx[b] = box[b] = -900; else if (bx[b] > sc.W + 900) bx[b] = box[b] = sc.W + 900;
+      if (bz[b] < -1200) bz[b] = boz[b] = -1200; else if (bz[b] > 1200) bz[b] = boz[b] = 1200;
+    }
+  }
+  function bounds() {
+    const sc = S.scene, fl = sc.floorY, kl = sc.killY, wl = sc.wallL, wr = sc.wallR, fr = sc.friction, np = S.np, xr = sc.W + 900;
+    for (let i = 0; i < np; i++) {
+      if (im[i] === 0) continue;
+      const r = prad[i];
+      if (py[i] > fl - r) { py[i] = fl - r; ox[i] = px[i] - (px[i] - ox[i]) * fr; oz[i] = pz[i] - (pz[i] - oz[i]) * fr; }
+      if (px[i] < wl + r) px[i] = wl + r; else if (px[i] > wr - r) px[i] = wr - r;
+      if (py[i] > kl) { py[i] = oy[i] = kl; ox[i] = px[i]; oz[i] = pz[i]; }
+      if (py[i] < -1600) py[i] = oy[i] = -1600;
+      if (px[i] < -900) px[i] = ox[i] = -900; else if (px[i] > xr) px[i] = ox[i] = xr;
+      if (pz[i] < -1200) pz[i] = oz[i] = -1200; else if (pz[i] > 1200) pz[i] = oz[i] = 1200;
+    }
+  }
+  const clampTo = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+  function moveGrab() {
+    if (!grab.active) return;
+    const sc = S.scene, dx = grab.dx, dy = grab.dy * sc.cT, dz = -grab.dy * sc.sT, M = 9;
+    for (let j = 0; j < grab.n; j++) {
+      const i = grab.idx[j];
+      let mx = grab.gx[j] + dx - px[i], my = grab.gy[j] + dy - py[i], mz = grab.gz[j] + dz - pz[i];
+      const l = Math.sqrt(mx * mx + my * my + mz * mz);
+      if (l > M) { const s = M / l; mx *= s; my *= s; mz *= s; }
+      ox[i] = px[i]; oy[i] = py[i]; oz[i] = pz[i];
+      px[i] = clampTo(px[i] + mx, -880, sc.W + 880); py[i] = clampTo(py[i] + my, -1580, sc.killY - 10); pz[i] = clampTo(pz[i] + mz, -1180, 1180);
+    }
+    const b = grab.ball;
+    if (b >= 0) {
+      let mx = grab.bx0 + dx - bx[b], my = grab.by0 + dy - by[b], mz = grab.bz0 + dz - bz[b];
+      const l = Math.sqrt(mx * mx + my * my + mz * mz);
+      if (l > M) { const s = M / l; mx *= s; my *= s; mz *= s; }
+      box[b] = bx[b]; boy[b] = by[b]; boz[b] = bz[b];
+      bx[b] = clampTo(bx[b] + mx, -880, sc.W + 880); by[b] = clampTo(by[b] + my, -1580, sc.killY - 10); bz[b] = clampTo(bz[b] + mz, -1180, 1180);
+    }
+  }
+  function substep() {
+    const sc = S.scene, g = G * S.params.gravity * H2, damp = sc.damp, np = S.np;
+    for (let i = 0; i < np; i++) {
+      if (im[i] === 0) continue;
+      let vx = (px[i] - ox[i]) * damp, vy = (py[i] - oy[i]) * damp, vz = (pz[i] - oz[i]) * damp;
+      const v2 = vx * vx + vy * vy + vz * vz;
+      if (v2 > VMAX * VMAX) { const s = VMAX / Math.sqrt(v2); vx *= s; vy *= s; vz *= s; }
+      ox[i] = px[i]; oy[i] = py[i]; oz[i] = pz[i];
+      px[i] += vx + wx[i] * H2; py[i] += vy + g + wy[i] * H2; pz[i] += vz + wz[i] * H2;
+    }
+    moveGrab();
+    for (let it = 0; it < S.iters; it++) solve(it & 1);
+    if (S.bodies.length) { for (let i = 0; i < S.bodies.length; i++) pressure(S.bodies[i]); bodyCollide(); }
+    if (S.pegs.length) pegCollide();
+    if (S.nb) stepBalls(g);
+    bounds();
+  }
+  function sanitize() {
+    const np = S.np, L = 1e5;
+    for (let i = 0; i < np; i++) {
+      const x = px[i], y = py[i], z = pz[i];
+      if (!(x > -L && x < L && y > -L && y < L && z > -L && z < L)) { px[i] = ox[i] = hx[i]; py[i] = oy[i] = hy[i]; pz[i] = oz[i] = hz[i]; S.fixed++; }
+    }
+    for (let b = 0; b < S.nb; b++) {
+      const x = bx[b], y = by[b], z = bz[b];
+      if (!(x > -L && x < L && y > -L && y < L && z > -L && z < L)) { bx[b] = box[b] = S.scene.W / 2; by[b] = boy[b] = -200; bz[b] = boz[b] = 0; S.fixed++; }
+    }
+  }
+  function advance(n) {
+    if (!S.scene) return;
+    forces();
+    for (let s = 0; s < n; s++) { if (S.scene.ambient) S.scene.ambient(); substep(); S.time += H; }
+    sanitize();
+  }
+  function build(name, WW, WH) {
+    clear();
+    seed = 7 + name.length * 131 + name.charCodeAt(0);
+    const sc = SCENES[name](WW, WH);
+    sc.name = name; S.scene = sc;
+    Object.assign(S.params, sc.defaults);
+    forces();
+    if (sc.warm) { for (let i = 0; i < sc.warm; i += 6) advance(6); }
+    return sc;
+  }
+
+  // ---- interaction (coordinates are in projected world units) ------------------
+  function grabStart(sx, sy, rad) {
+    grabEnd();
+    const sc = S.scene, np = S.np, pv = sc.pivotY, cT = sc.cT, sT = sc.sT;
+    let best = -1, bd = rad * rad;
+    for (let i = 0; i < np; i++) {
+      if (pin[i]) continue;
+      const dx = px[i] - sx, dy = pv + (py[i] - pv) * cT - pz[i] * sT - sy, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+    let bb = -1;
+    for (let b = 0; b < S.nb; b++) {
+      const dx = bx[b] - sx, dy = pv + (by[b] - pv) * cT - bz[b] * sT - sy;
+      if (dx * dx + dy * dy < br[b] * br[b]) bb = b;
+    }
+    grab.n = 0; grab.ball = -1;
+    if (bb >= 0) { grab.ball = bb; grab.bx0 = bx[bb]; grab.by0 = by[bb]; grab.bz0 = bz[bb]; }
+    else if (best >= 0) {
+      const R2 = sc.grabR * sc.grabR, body = pbody[best], X = px[best], Y = py[best], Z = pz[best];
+      for (let i = 0; i < np && grab.n < MAXG; i++) {
+        if (pin[i] || pbody[i] !== body) continue;
+        const dx = px[i] - X, dy = py[i] - Y, dz = pz[i] - Z;
+        if (dx * dx + dy * dy + dz * dz > R2) continue;
+        const j = grab.n++; grab.idx[j] = i; grab.gx[j] = px[i]; grab.gy[j] = py[i]; grab.gz[j] = pz[i];
+        pkin[i] = 1; mass(i);
+      }
+    } else return false;
+    grab.active = true; grab.sx0 = sx; grab.sy0 = sy; grab.dx = 0; grab.dy = 0;
+    return true;
+  }
+  function grabMove(sx, sy) { if (grab.active) { grab.dx = sx - grab.sx0; grab.dy = sy - grab.sy0; } }
+  function grabEnd() {
+    if (!grab.active) return;
+    for (let j = 0; j < grab.n; j++) { const i = grab.idx[j]; pkin[i] = 0; mass(i); }
+    grab.n = 0; grab.ball = -1; grab.active = false;
+  }
+  function slice(x0, y0, x1, y1) {
+    const sc = S.scene, np = S.np, nc = S.nc, pv = sc.pivotY, cT = sc.cT, sT = sc.sT;
+    for (let i = 0; i < np; i++) ty[i] = pv + (py[i] - pv) * cT - pz[i] * sT;
+    const rx = x1 - x0, ry = y1 - y0, lx = Math.min(x0, x1), hx_ = Math.max(x0, x1), ly = Math.min(y0, y1), hy_ = Math.max(y0, y1);
+    let n = 0;
+    for (let k = 0; k < nc; k++) {
+      if (!calive[k] || ckind[k] === 3) continue;
+      const a = ca[k], b = cb[k], ax = px[a], bx_ = px[b];
+      if ((ax < lx && bx_ < lx) || (ax > hx_ && bx_ > hx_)) continue;
+      const ay = ty[a], by_ = ty[b];
+      if ((ay < ly && by_ < ly) || (ay > hy_ && by_ > hy_)) continue;
+      const sx = bx_ - ax, sy = by_ - ay, den = rx * sy - ry * sx;
+      if (den === 0) continue;
+      const qx = ax - x0, qy = ay - y0, t = (qx * sy - qy * sx) / den, u = (qx * ry - qy * rx) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) { breakC(k); n++; }
+    }
+    return n;
+  }
+  // A stroke re-tests its last few segments, so a thread that swings across the blade between frames is still cut.
+  function strokeBegin(st, x, y) { st.h = [x, y]; return st; }
+  function strokeTo(st, x, y, back) {
+    const h = st.h; h.push(x, y);
+    let n = 0;
+    for (let i = h.length - 4, k = 0; i >= 0 && k < back; i -= 2, k++) n += slice(h[i], h[i + 1], h[i + 2], h[i + 3]);
+    if (h.length > 2 * (back + 1)) h.splice(0, h.length - 2 * (back + 1));
+    return n;
+  }
+  function unpinNear(sx, sy, rad) {
+    const sc = S.scene, pv = sc.pivotY; let n = 0;
+    for (let i = 0; i < S.np; i++) {
+      if (!pin[i]) continue;
+      const dx = px[i] - sx, dy = pv + (py[i] - pv) * sc.cT - pz[i] * sc.sT - sy;
+      if (dx * dx + dy * dy < rad * rad) { setPin(i, 0); n++; }
+    }
+    return n;
+  }
+  function kickBody(id, vx, vy) {
+    const b = S.bodies[id]; if (!b) return;
+    for (let i = b.first; i < b.last; i++) { ox[i] -= vx * H; oy[i] -= vy * H; }
+  }
+  function dropBall() { const sc = S.scene; return sc.dropBall ? sc.dropBall() : spawnBall(sc.W / 2 + (rnd() - 0.5) * 300, -60, 0, 24 + rnd() * 10, 1 / 12); }
+  return { S, grab, build, advance, grabStart, grabMove, grabEnd, slice, strokeBegin, strokeTo, unpinNear, setPin, kickBody, spawnBall, dropBall, names: Object.keys(SCENES) };
+}
+//</core>
+
+(() => {
+  'use strict';
+  const sim = createSim(), S = sim.S;
+  const { px, py, pz, pin, ca, cb, oa, ob, calive, ckind, broken, bx, by, bz, br, bcol } = S;
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d', { alpha: false });
+  const $ = id => document.getElementById(id);
+  const SX = new Float32Array(9600), SY = new Float32Array(9600), SD = new Float32Array(9600);
+  const NS = 24, NL = 8, NB = 3 * NS, MAXQ = 9600;
+  const heads = new Int32Array(NL * NB), nextQ = new Int32Array(MAXQ), qB = new Int16Array(MAXQ), qD = new Float32Array(MAXQ), hotQ = new Int32Array(MAXQ);
+  const pal = new Array(NB);
+  const BALLS = [['#FFF0BF', '#FFD166', '#8A6A1E'], ['#FFD0CE', '#EF767A', '#7C2F3A'], ['#C9F3EA', '#49BEAA', '#1E5E58'], ['#E1DBFF', '#9D8DF1', '#463C8C'], ['#FFFFFF', '#EDE6D6', '#7E7868']];
+  let W = 0, H = 0, dpr = 1, dprCap = 2, scale = 1, WW = 1600, WH = 900, bg = null;
+  let current = 'curtain', paused = false, slow = false, wire = false, acc = 0, last = 0, fade = 1;
+  let ptr = null, trail = [], strokeId = 0, hotN = 0;
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const auto = { on: !reduced, acts: [] };
+  $('bAuto').setAttribute('aria-pressed', auto.on);
+
+  // ---- sizing -------------------------------------------------------------
+  function measure() {
+    W = window.innerWidth; H = window.innerHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+    cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr));
+    scale = Math.min(H / 900, W / 1000);
+    bg = document.createElement('canvas'); bg.width = cv.width; bg.height = cv.height;
+    const b = bg.getContext('2d'), g = b.createRadialGradient(cv.width * 0.5, cv.height * 0.4, 0, cv.width * 0.5, cv.height * 0.45, Math.max(cv.width, cv.height) * 0.75);
+    g.addColorStop(0, '#1D2350'); g.addColorStop(0.45, '#131738'); g.addColorStop(1, '#0C0E1C');
+    b.fillStyle = g; b.fillRect(0, 0, bg.width, bg.height);
+  }
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    measure();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (Math.abs(W / scale - WW) > WW * 0.03 || Math.abs(H / scale - WH) > WH * 0.03) load(current); }, 220);
+  });
+
+  // ---- scene loading ----------------------------------------------------------
+  function makePal(tones) {
+    for (let t = 0; t < 3; t++) for (let s = 0; s < NS; s++) {
+      const l = s / (NS - 1) * 1.25, c = tones[t]; let r, g, b;
+      if (l <= 1) { const k = 0.1 + 0.9 * l, sh = (1 - l) * 0.5; r = c[0] * k + 14 * sh; g = c[1] * k + 18 * sh; b = c[2] * k + 62 * sh; }
+      else { const k = (l - 1) * 1.7; r = c[0] + (255 - c[0]) * k; g = c[1] + (255 - c[1]) * k; b = c[2] + (255 - c[2]) * k; }
+      pal[t * NS + s] = 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+    }
+  }
+  function load(name) {
+    current = name; WW = W / scale; WH = H / scale;
+    if (auto.on) sim.grabEnd();
+    const sc = sim.build(name, WW, WH);
+    makePal(sc.palette);
+    auto.acts = makeScript(name);
+    trail.length = 0; acc = 0; fade = 1; ptr = null;
+    document.querySelectorAll('.scenes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.scene === name));
+    syncSliders(); stats(true);
+  }
+  function syncSliders() {
+    const P = S.params;
+    $('wind').value = P.wind; $('dir').value = P.windDir; $('grav').value = P.gravity; $('tear').value = P.tear;
+    $('oWind').textContent = Math.round(P.wind);
+    $('oDir').textContent = (P.windDir > 0 ? '+' : '') + Math.round(P.windDir) + '°';
+    $('oGrav').textContent = (+P.gravity).toFixed(2) + ' g';
+    $('oTear').textContent = (+P.tear).toFixed(1) + '×';
+  }
+
+  // ---- automatic demo ------------------------------------------------------------
+  function liveRect() {
+    const cl = S.cloths[0], sc = S.scene;
+    if (!cl) return sc.rect;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const n = cl.cols * cl.rows, lim = Math.min(sc.floorY - 6, sc.killY - 10);
+    for (let i = cl.p0; i < cl.p0 + n; i++) {
+      if (py[i] > lim || py[i] > WH + 60) continue;
+      const y = sc.pivotY + (py[i] - sc.pivotY) * sc.cT - pz[i] * sc.sT;
+      if (px[i] < x0) x0 = px[i]; if (px[i] > x1) x1 = px[i]; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return x1 > x0 ? { x0, y0, x1, y1 } : sc.rect;
+  }
+  function makeScript(name) {
+    const A = [], sc = S.scene;
+    const tug = (t0, t1, ax, ay, bx, by) => A.push({ kind: 'tug', t0, t1, ax, ay, bx, by });
+    const cut = (t0, t1, ax, ay, bx, by, abs) => A.push({ kind: 'cut', t0, t1, ax, ay, bx, by, abs });
+    if (name === 'curtain') {
+      tug(4.2, 6.2, 0.30, 0.55, 0.10, 1.04); tug(8.2, 10.0, 0.74, 0.5, 0.96, 1.02);
+      cut(12.5, 14.6, -0.04, 0.66, 0.6, 0.3); cut(16.4, 18.4, 0.52, 0.1, 0.78, 1.08);
+      A.push({ kind: 'unpins', t0: 23.5, t1: 28, order: 'right' }); A.push({ kind: 'reset', t0: 31.5 });
+    } else if (name === 'flag') {
+      cut(7.5, 9.0, 0.42, 0.36, 1.12, 0.3); cut(12.5, 14.0, 0.5, 0.7, 1.12, 0.74);
+      cut(17.5, 18.6, 0.14, -0.08, 0.2, 0.5);
+      A.push({ kind: 'unpins', t0: 21.5, t1: 23.5, order: 'bottom' }); A.push({ kind: 'reset', t0: 26 });
+    } else if (name === 'net') {
+      tug(11, 12.6, 0.5, 0.2, 0.5, -0.2);
+      cut(15, 16.8, 0.16, 0.42, 0.84, 0.78);
+      A.push({ kind: 'unpinAt', t0: 22, fx: 1, fy: 1 }); A.push({ kind: 'unpinAt', t0: 24.5, fx: 0, fy: 1 });
+      A.push({ kind: 'reset', t0: 29 });
+    } else if (name === 'jelly') {
+      for (let t = 4.5, i = 0; t < 32; t += 2.3, i++) A.push({ kind: 'kick', t0: t, body: (i * 3 + 1) % 7, vx: ((i * 37) % 11 - 5) * 150, vy: -1250 - (i % 3) * 260 });
+      A.push({ kind: 'reset', t0: 35 });
+    } else if (name === 'ropes') {
+      const d = sc.decor;
+      cut(15, 15.5, d.bridge.x0 + (d.bridge.x1 - d.bridge.x0) * 0.3, d.bridge.y - 50, d.bridge.x0 + (d.bridge.x1 - d.bridge.x0) * 0.32, d.bridge.y + d.bridge.sag + 80, true);
+      cut(20, 25.5, d.beam.x0 - 30, d.beam.y + 46, d.beam.x1 + 30, d.beam.y + 78, true);
+      A.push({ kind: 'reset', t0: 31 });
+    }
+    return A;
+  }
+  function runAuto() {
+    if (!auto.on) return;
+    const t = S.time, A = auto.acts;
+    for (let i = 0; i < A.length; i++) {
+      const a = A[i];
+      if (a.done || t < a.t0) continue;
+      if (a.kind === 'reset') { load(current); return; }
+      if (!a.started) {
+        a.started = true;
+        if (a.kind === 'tug' || a.kind === 'cut') {
+          if (!a.abs) { const R = liveRect(), w = R.x1 - R.x0, h = R.y1 - R.y0; a.ax = R.x0 + a.ax * w; a.bx = R.x0 + a.bx * w; a.ay = R.y0 + a.ay * h; a.by = R.y0 + a.by * h; }
+          a.sid = ++strokeId; a.st = sim.strokeBegin({}, a.ax, a.ay);
+          if (a.kind === 'tug' && (ptr || !sim.grabStart(a.ax, a.ay, 80))) { a.done = true; continue; }
+        } else if (a.kind === 'unpins') {
+          a.list = []; for (let p = 0; p < S.np; p++) if (pin[p]) a.list.push(p);
+          a.list.sort(a.order === 'right' ? (u, v) => px[v] - px[u] : (u, v) => py[v] - py[u]); a.n = 0;
+        } else if (a.kind === 'unpinAt') {
+          const R = S.scene.rect; sim.unpinNear(R.x0 + (R.x1 - R.x0) * a.fx, R.y0 + (R.y1 - R.y0) * a.fy, 40); a.done = true; continue;
+        } else if (a.kind === 'kick') { sim.kickBody(a.body, a.vx, a.vy); a.done = true; continue; }
+      }
+      const p = Math.min(1, (t - a.t0) / (a.t1 - a.t0));
+      if (a.kind === 'tug') {
+        const e = p * p * (3 - 2 * p);
+        sim.grabMove(a.ax + (a.bx - a.ax) * e, a.ay + (a.by - a.ay) * e);
+        if (p >= 1) { sim.grabEnd(); a.done = true; }
+      } else if (a.kind === 'cut') {
+        const x = a.ax + (a.bx - a.ax) * p, y = a.ay + (a.by - a.ay) * p;
+        sim.strokeTo(a.st, x, y, 7); trail.push({ x, y, t: performance.now(), s: a.sid });
+        if (p >= 1) a.done = true;
+      } else if (a.kind === 'unpins') {
+        const want = Math.ceil(p * a.list.length);
+        while (a.n < want) sim.setPin(a.list[a.n++], 0);
+        if (p >= 1) a.done = true;
+      }
+    }
+  }
+  function setAuto(v) {
+    if (auto.on && !v) { for (const a of auto.acts) if (a.kind === 'tug' && a.started && !a.done) { sim.grabEnd(); a.done = true; } }
+    auto.on = v; $('bAuto').setAttribute('aria-pressed', v);
+    if (v) { auto.acts = makeScript(current); for (const a of auto.acts) if (a.kind !== 'reset' && a.t0 < S.time) a.done = true; else if (a.kind === 'reset' && a.t0 < S.time + 8) a.t0 = S.time + 14; }
+  }
+  const touched = () => { if (auto.on) setAuto(false); };
+
+  // ---- input ---------------------------------------------------------------------
+  const world = e => ({ x: e.clientX / scale, y: e.clientY / scale });
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('pointerdown', e => {
+    touched();
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    const p = world(e), cutting = e.button === 2 || e.shiftKey;
+    ptr = { x: p.x, y: p.y, moved: 0, t0: performance.now(), mode: cutting ? 'cut' : 'grab', sid: ++strokeId, held: false };
+    if (cutting) { cv.className = 'cut'; ptr.st = sim.strokeBegin({}, p.x, p.y); trail.push({ x: p.x, y: p.y, t: ptr.t0, s: ptr.sid }); }
+    else { ptr.held = sim.grabStart(p.x, p.y, 34); cv.className = 'held'; }
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptr) return;
+    const p = world(e), dx = p.x - ptr.x, dy = p.y - ptr.y;
+    ptr.moved += Math.sqrt(dx * dx + dy * dy);
+    if (ptr.mode === 'cut') { sim.strokeTo(ptr.st, p.x, p.y, 3); trail.push({ x: p.x, y: p.y, t: performance.now(), s: ptr.sid }); }
+    else sim.grabMove(p.x, p.y);
+    ptr.x = p.x; ptr.y = p.y;
+  });
+  const release = e => {
+    if (!ptr) return;
+    if (ptr.mode === 'grab') {
+      sim.grabEnd();
+      if (ptr.moved < 6 && performance.now() - ptr.t0 < 400) sim.unpinNear(ptr.x, ptr.y, 17);
+    }
+    ptr = null; cv.className = '';
+  };
+  cv.addEventListener('pointerup', release);
+  cv.addEventListener('pointercancel', release);
+  window.addEventListener('blur', release);
+
+  const bind = (id, key, out) => $(id).addEventListener('input', e => { touched(); S.params[key] = +e.target.value; syncSliders(); });
+  bind('wind', 'wind'); bind('dir', 'windDir'); bind('grav', 'gravity'); bind('tear', 'tear');
+  const setSlow = v => { slow = v; $('bSlow').setAttribute('aria-pressed', v); };
+  const setWire = v => { wire = v; $('bWire').setAttribute('aria-pressed', v); };
+  $('bSlow').addEventListener('click', () => setSlow(!slow));
+  $('bWire').addEventListener('click', () => setWire(!wire));
+  $('bAuto').addEventListener('click', () => setAuto(!auto.on));
+  $('bBall').addEventListener('click', () => sim.dropBall());
+  $('bReset').addEventListener('click', () => load(current));
+  document.querySelectorAll('.scenes button').forEach(b => b.addEventListener('click', () => load(b.dataset.scene)));
+  window.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey || !e.key) return;
+    const k = e.key.toLowerCase(), tag = e.target && e.target.tagName;
+    if ((k === ' ' || k === 'enter') && (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT')) return;
+    if (k >= '1' && k <= '5') load(sim.names[+k - 1]);
+    else if (k === 'r') load(current);
+    else if (k === 'h') document.body.classList.toggle('bare');
+    else if (k === 's') setSlow(!slow);
+    else if (k === 'w') setWire(!wire);
+    else if (k === 'a') setAuto(!auto.on);
+    else if (k === 'b') sim.dropBall();
+    else if (k === ' ') { paused = !paused; e.preventDefault(); }
+    else return;
+  });
+  // a mouse click should not leave focus on a button, or Space would press it again instead of pausing
+  window.addEventListener('click', e => { const b = e.detail > 0 && e.target && e.target.closest && e.target.closest('button'); if (b) b.blur(); });
+
+  // ---- drawing ---------------------------------------------------------------------
+  function project() {
+    const sc = S.scene, pv = sc.pivotY, cT = sc.cT, sT = sc.sT, np = S.np;
+    for (let i = 0; i < np; i++) { const y = py[i] - pv, z = pz[i]; SX[i] = px[i]; SY[i] = pv + y * cT - z * sT; SD[i] = z * cT + y * sT; }
+  }
+  const projY = (y, z) => { const sc = S.scene; return sc.pivotY + (y - sc.pivotY) * sc.cT - z * sc.sT; };
+  function quadPath(cl, q) {
+    const cols = cl.cols, qc = cols - 1, r = (q / qc) | 0, c = q - r * qc, A = cl.p0 + r * cols + c, B = A + 1, D = A + cols, C = D + 1, al = cl.qa[q];
+    if (al === 3) {
+      const mx = (SX[A] + SX[B] + SX[C] + SX[D]) * 0.25, my = (SY[A] + SY[B] + SY[C] + SY[D]) * 0.25, e = 1.09;
+      ctx.moveTo(mx + (SX[A] - mx) * e, my + (SY[A] - my) * e); ctx.lineTo(mx + (SX[B] - mx) * e, my + (SY[B] - my) * e);
+      ctx.lineTo(mx + (SX[C] - mx) * e, my + (SY[C] - my) * e); ctx.lineTo(mx + (SX[D] - mx) * e, my + (SY[D] - my) * e);
+    } else if (al === 1) { ctx.moveTo(SX[A], SY[A]); ctx.lineTo(SX[B], SY[B]); ctx.lineTo(SX[D], SY[D]); }
+    else { ctx.moveTo(SX[B], SY[B]); ctx.lineTo(SX[C], SY[C]); ctx.lineTo(SX[D], SY[D]); }
+  }
+  function drawBall(b) {
+    const x = bx[b], y = projY(by[b], bz[b]), r = br[b], c = BALLS[bcol[b] % 5];
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.42, r * 0.06, x, y, r);
+    g.addColorStop(0, c[0]); g.addColorStop(0.5, c[1]); g.addColorStop(1, c[2]);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+  }
+  const ballOrder = [];
+  function sortBalls() {
+    const sc = S.scene; ballOrder.length = 0;
+    for (let b = 0; b < S.nb; b++) ballOrder.push(b);
+    ballOrder.sort((u, v) => (bz[v] * sc.cT + (by[v] - sc.pivotY) * sc.sT) - (bz[u] * sc.cT + (by[u] - sc.pivotY) * sc.sT));
+  }
+  const ballDepth = b => { const sc = S.scene; return bz[b] * sc.cT + (by[b] - sc.pivotY) * sc.sT - br[b] * 0.4; };
+  function clothShadow(cl) {
+    const sc = S.scene, cols = cl.cols, qc = cols - 1, qr = cl.rows - 1, p0 = cl.p0, qa = cl.qa;
+    ctx.beginPath();
+    if (sc.tilt) {
+      const fy = sc.pivotY + (sc.floorY - sc.pivotY) * sc.cT, sT = sc.sT;
+      for (let r = 0; r < qr; r += 2) for (let c = 0; c < qc; c += 2) {
+        if (!qa[r * qc + c]) continue;
+        const c2 = Math.min(c + 2, qc), r2 = Math.min(r + 2, qr), A = p0 + r * cols + c, B = p0 + r * cols + c2, C = p0 + r2 * cols + c2, D = p0 + r2 * cols + c;
+        if (py[A] > sc.floorY - 3) continue;
+        ctx.moveTo(px[A], fy - pz[A] * sT); ctx.lineTo(px[B], fy - pz[B] * sT); ctx.lineTo(px[C], fy - pz[C] * sT); ctx.lineTo(px[D], fy - pz[D] * sT);
+      }
+      ctx.fillStyle = 'rgba(3,4,12,.36)';
+    } else {
+      const lim = WH + 80;
+      for (let r = 0; r < qr; r += 2) for (let c = 0; c < qc; c += 2) {
+        if (!qa[r * qc + c]) continue;
+        const c2 = Math.min(c + 2, qc), r2 = Math.min(r + 2, qr), A = p0 + r * cols + c, B = p0 + r * cols + c2, C = p0 + r2 * cols + c2, D = p0 + r2 * cols + c;
+        if (py[A] > lim) continue;
+        const a = (150 - pz[A]) * 0.26, b = (150 - pz[B]) * 0.26, cc = (150 - pz[C]) * 0.26, d = (150 - pz[D]) * 0.26;
+        ctx.moveTo(px[A] + a * 0.8, py[A] + a); ctx.lineTo(px[B] + b * 0.8, py[B] + b); ctx.lineTo(px[C] + cc * 0.8, py[C] + cc); ctx.lineTo(px[D] + d * 0.8, py[D] + d);
+      }
+      ctx.fillStyle = 'rgba(4,5,16,.3)';
+    }
+    ctx.fill();
+  }
+  function drawCloth(cl) {
+    const sc = S.scene, cols = cl.cols, qc = cols - 1, qr = cl.rows - 1, p0 = cl.p0, tone = cl.tone, qn = cl.qn, qa = cl.qa, nq = cl.nq;
+    const sT = sc.sT, cT = sc.cT;
+    // light, view and half vectors (y points down, z points away from the viewer)
+    let Lx = -0.45, Ly = -0.55, Lz = -0.7;
+    if (sc.tilt) { Lx = -0.32; Ly = -0.84; Lz = -0.44; }
+    let l = Math.sqrt(Lx * Lx + Ly * Ly + Lz * Lz); Lx /= l; Ly /= l; Lz /= l;
+    let Hx = Lx, Hy = Ly - sT, Hz = Lz - cT; l = Math.sqrt(Hx * Hx + Hy * Hy + Hz * Hz); Hx /= l; Hy /= l; Hz /= l;
+    const rest = cl.rest, hotLim = rest * (1 + (S.params.tear - 1) * 0.55), hot2 = hotLim * hotLim;
+    let dmin = 1e9, dmax = -1e9; hotN = 0;
+    for (let r = 0; r < qr; r++) for (let c = 0; c < qc; c++) {
+      const q = r * qc + c;
+      if (!qa[q]) { qB[q] = -1; continue; }
+      const A = p0 + r * cols + c, B = A + 1, D = A + cols, C = D + 1, q3 = q * 3;
+      let nx = qn[q3], ny = qn[q3 + 1], nz = qn[q3 + 2];
+      if (ny * sT + nz * cT > 0) { nx = -nx; ny = -ny; nz = -nz; }
+      const d = nx * Lx + ny * Ly + nz * Lz, hd = nx * Hx + ny * Hy + nz * Hz;
+      let lum = d > 0 ? 0.3 + 0.7 * d : 0.3 + 0.06 * d;
+      if (hd > 0) { const s2 = hd * hd, s4 = s2 * s2, s8 = s4 * s4; lum += 0.3 * s8 * s8; }
+      const depth = (SD[A] + SD[B] + SD[C] + SD[D]) * 0.25;
+      let cue = 1 - depth * 0.0011; if (cue < 0.7) cue = 0.7; else if (cue > 1.12) cue = 1.12;
+      lum *= cue;
+      let s = (lum * (NS / 1.25)) | 0; if (s < 0) s = 0; else if (s >= NS) s = NS - 1;
+      qB[q] = tone[q] * NS + s; qD[q] = depth;
+      if (depth < dmin) dmin = depth; if (depth > dmax) dmax = depth;
+      const ax = px[B] - px[A], ay = py[B] - py[A], az = pz[B] - pz[A], ex = px[D] - px[A], ey = py[D] - py[A], ez = pz[D] - pz[A];
+      if (ax * ax + ay * ay + az * az > hot2 || ex * ex + ey * ey + ez * ez > hot2) hotQ[hotN++] = q;
+    }
+    if (wire) {
+      ctx.beginPath();
+      for (let k = cl.h0; k < cl.s0; k++) { if (!calive[k]) continue; const a = ca[k], b = cb[k]; ctx.moveTo(SX[a], SY[a]); ctx.lineTo(SX[b], SY[b]); }
+      ctx.strokeStyle = 'rgba(237,230,214,.62)'; ctx.lineWidth = 0.7; ctx.stroke();
+      for (let i = 0; i < ballOrder.length; i++) drawBall(ballOrder[i]);
+    } else {
+      heads.fill(-1);
+      const span = dmax - dmin + 1e-4, inv = NL / span;
+      for (let q = 0; q < nq; q++) {
+        const b = qB[q]; if (b < 0) continue;
+        let li = ((dmax - qD[q]) * inv) | 0; if (li >= NL) li = NL - 1;
+        const hb = li * NB + b; nextQ[q] = heads[hb]; heads[hb] = q;
+      }
+      let bi = 0;
+      for (let li = 0; li < NL; li++) {
+        const mid = dmax - (li + 0.5) / inv;
+        while (bi < ballOrder.length && ballDepth(ballOrder[bi]) > mid) drawBall(ballOrder[bi++]);
+        const base = li * NB;
+        for (let b = 0; b < NB; b++) {
+          let q = heads[base + b]; if (q < 0) continue;
+          ctx.fillStyle = pal[b]; ctx.beginPath();
+          while (q >= 0) { quadPath(cl, q); q = nextQ[q]; }
+          ctx.fill();
+        }
+      }
+      while (bi < ballOrder.length) drawBall(ballOrder[bi++]);
+    }
+    if (hotN) {
+      ctx.beginPath(); for (let i = 0; i < hotN; i++) quadPath(cl, hotQ[i]);
+      ctx.fillStyle = wire ? 'rgba(239,118,122,.75)' : 'rgba(239,118,122,.5)'; ctx.fill();
+    }
+  }
+  function drawFray() {
+    const n = S.nbroken; if (!n) return;
+    const sc = S.scene, lim = Math.min(sc.killY - 10, WH + 60);
+    ctx.beginPath();
+    for (let j = Math.max(0, n - 5000); j < n; j++) {
+      const k = broken[j]; if (ckind[k] !== 0) continue;
+      const a = ca[k], b = cb[k], o1 = oa[k], o2 = ob[k], len = S.crest[k] * 0.62;
+      if (o1 >= 0 && py[a] < lim) { let dx = SX[a] - SX[o1], dy = SY[a] - SY[o1]; const l = Math.sqrt(dx * dx + dy * dy) + 1e-6; dx = dx / l; dy = dy / l + 0.45; ctx.moveTo(SX[a], SY[a]); ctx.lineTo(SX[a] + dx * len, SY[a] + dy * len); }
+      if (o2 >= 0 && py[b] < lim) { let dx = SX[b] - SX[o2], dy = SY[b] - SY[o2]; const l = Math.sqrt(dx * dx + dy * dy) + 1e-6; dx = dx / l; dy = dy / l + 0.45; ctx.moveTo(SX[b], SY[b]); ctx.lineTo(SX[b] + dx * len, SY[b] + dy * len); }
+    }
+    ctx.strokeStyle = 'rgba(244,238,224,.7)'; ctx.lineWidth = 0.8; ctx.stroke();
+  }
+  function drawRopes() {
+    const R = S.ropes; if (!R.length) return;
+    ctx.lineCap = 'round';
+    // snapped ends
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.beginPath();
+      for (const rp of R) {
+        if (rp.style !== 'chain') continue;
+        for (let j = pass; j < rp.n - 1; j += 2) { const k = rp.c0 + j; if (!calive[k]) continue; const a = ca[k], b = cb[k]; ctx.moveTo(SX[a], SY[a]); ctx.lineTo(SX[b], SY[b]); }
+      }
+      ctx.strokeStyle = pass ? '#D8D6E6' : '#8C8EAC'; ctx.lineWidth = pass ? 2.4 : 5; ctx.stroke();
+    }
+    for (const rp of R) {
+      if (rp.style === 'bridge') {
+        ctx.beginPath();
+        for (let j = 0; j < rp.n - 1; j++) { const k = rp.c0 + j; if (!calive[k]) continue; const a = ca[k], b = cb[k]; ctx.moveTo(SX[a], SY[a]); ctx.lineTo(SX[b], SY[b]); }
+        ctx.strokeStyle = '#6E6F8E'; ctx.lineWidth = 3; ctx.stroke();
+        for (let tone = 0; tone < 2; tone++) {
+          ctx.beginPath();
+          for (let j = tone; j < rp.n - 1; j += 2) {
+            const k = rp.c0 + j; if (!calive[k]) continue;
+            const a = ca[k], b = cb[k], dx = SX[b] - SX[a], dy = SY[b] - SY[a], l = Math.sqrt(dx * dx + dy * dy) + 1e-6, ux = dx / l, uy = dy / l;
+            const mx = (SX[a] + SX[b]) / 2, my = (SY[a] + SY[b]) / 2, hw = l * 0.44, hh = 4.5;
+            ctx.moveTo(mx - ux * hw + uy * hh, my - uy * hw - ux * hh); ctx.lineTo(mx + ux * hw + uy * hh, my + uy * hw - ux * hh);
+            ctx.lineTo(mx + ux * hw - uy * hh, my + uy * hw + ux * hh); ctx.lineTo(mx - ux * hw - uy * hh, my - uy * hw + ux * hh); ctx.closePath();
+          }
+          ctx.fillStyle = tone ? '#D9C9A3' : '#BFAE86'; ctx.fill();
+        }
+      } else if (rp.bob >= 0) {
+        const x = SX[rp.bob], y = SY[rp.bob], r = rp.bobR, c = BALLS[rp.tint % 2 ? 4 : 0];
+        const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.08, x, y, r);
+        g.addColorStop(0, c[0]); g.addColorStop(0.5, c[1]); g.addColorStop(1, c[2]);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.lineCap = 'butt';
+  }
+  function drawBody(b) {
+    const ring = b.ring, n = ring.length; let cx = 0, cy = 0, R = 0;
+    for (let i = 0; i < n; i++) { cx += SX[ring[i]]; cy += SY[ring[i]]; }
+    cx /= n; cy /= n;
+    for (let i = 0; i < n; i++) { const dx = SX[ring[i]] - cx, dy = SY[ring[i]] - cy; R += Math.sqrt(dx * dx + dy * dy); }
+    R /= n;
+    ctx.beginPath();
+    const z = ring[n - 1], f = ring[0];
+    ctx.moveTo((SX[z] + SX[f]) / 2, (SY[z] + SY[f]) / 2);
+    for (let i = 0; i < n; i++) { const p = ring[i], q = ring[(i + 1) % n]; ctx.quadraticCurveTo(SX[p], SY[p], (SX[p] + SX[q]) / 2, (SY[p] + SY[q]) / 2); }
+    ctx.closePath();
+    const c = BALLS[b.color % 5], g = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.42, R * 0.08, cx, cy, R * 1.3);
+    g.addColorStop(0, c[0]); g.addColorStop(0.5, c[1]); g.addColorStop(1, c[2]);
+    ctx.lineJoin = 'round'; ctx.strokeStyle = c[1]; ctx.lineWidth = b.skin; ctx.stroke();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.ellipse(cx - R * 0.3, cy - R * 0.46, R * 0.24, R * 0.11, -0.5, 0, 6.2832); ctx.fill();
+    // a small face, so the squash and spin are easy to read
+    const ang = Math.atan2(SY[f] - cy, SX[f] - cx) - b.a0, ca_ = Math.cos(ang), sa = Math.sin(ang);
+    const ref = b.center >= 0 ? b.center : f;
+    let vx = (px[ref] - S.ox[ref]) * 2.2, vy = (py[ref] - S.oy[ref]) * 2.2; const vl = Math.sqrt(vx * vx + vy * vy);
+    if (vl > 1) { vx /= vl; vy /= vl; }
+    const blink = ((S.time * 0.45 + b.id * 0.37) % 1) < 0.035, er = R * 0.09;
+    for (let s = -1; s <= 1; s += 2) {
+      const lx = s * R * 0.27, ly = -R * 0.06, ex = cx + lx * ca_ - ly * sa, ey = cy + lx * sa + ly * ca_;
+      if (blink) { ctx.strokeStyle = '#1B1D33'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ex - er, ey); ctx.lineTo(ex + er, ey); ctx.stroke(); continue; }
+      ctx.fillStyle = '#1B1D33'; ctx.beginPath(); ctx.arc(ex, ey, er, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex + vx * er * 0.35 - er * 0.25, ey + vy * er * 0.35 - er * 0.3, er * 0.36, 0, 6.2832); ctx.fill();
+    }
+  }
+  function decorBack() {
+    const sc = S.scene, d = sc.decor;
+    if (d.grid) {
+      const fy = z => projY(sc.floorY, z), cx = WW / 2;
+      ctx.beginPath();
+      for (let z = -420; z <= 420; z += 70) { ctx.moveTo(cx - 620, fy(z)); ctx.lineTo(cx + 620, fy(z)); }
+      for (let x = -620; x <= 620; x += 70) { ctx.moveTo(cx + x, fy(420)); ctx.lineTo(cx + x, fy(-420)); }
+      ctx.strokeStyle = 'rgba(237,230,214,.07)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+    if (d.pole) {
+      const g = ctx.createLinearGradient(d.pole.x - 5, 0, d.pole.x + 5, 0);
+      g.addColorStop(0, '#6F7192'); g.addColorStop(0.45, '#D9D7E8'); g.addColorStop(1, '#55577A');
+      ctx.fillStyle = g; ctx.fillRect(d.pole.x - 5, d.pole.y0, 10, WH - d.pole.y0 + 10);
+      ctx.fillStyle = '#FFD166'; ctx.beginPath(); ctx.arc(d.pole.x, d.pole.y0 - 6, 10, 0, 6.2832); ctx.fill();
+    }
+    if (d.box) {
+      ctx.strokeStyle = 'rgba(237,230,214,.22)'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(sc.wallL, sc.floorY - 760); ctx.lineTo(sc.wallL, sc.floorY); ctx.lineTo(sc.wallR, sc.floorY); ctx.lineTo(sc.wallR, sc.floorY - 760); ctx.stroke();
+      for (const p of S.pegs) {
+        const g = ctx.createRadialGradient(p.x - p.r * 0.3, p.y - p.r * 0.35, 2, p.x, p.y, p.r);
+        g.addColorStop(0, '#3A4078'); g.addColorStop(1, '#1A1D3C');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,209,102,.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    }
+    if (d.beam) {
+      ctx.strokeStyle = 'rgba(237,230,214,.16)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, sc.floorY + 1); ctx.lineTo(WW, sc.floorY + 1); ctx.stroke();
+      ctx.lineCap = 'round'; ctx.strokeStyle = '#2B2F5C'; ctx.lineWidth = 14; ctx.beginPath(); ctx.moveTo(d.beam.x0, d.beam.y - 6); ctx.lineTo(d.beam.x1, d.beam.y - 6); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,209,102,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(d.beam.x0, d.beam.y - 11); ctx.lineTo(d.beam.x1, d.beam.y - 11); ctx.stroke();
+      ctx.fillStyle = '#2B2F5C';
+      for (const x of [d.bridge.x0, d.bridge.x1]) { ctx.fillRect(x - 5, d.bridge.y - 14, 10, sc.floorY - d.bridge.y + 14); }
+      ctx.lineCap = 'butt';
+    }
+  }
+  function drawPosts(far) {
+    const sc = S.scene, P = sc.decor.posts; if (!P) return;
+    for (const p of P) {
+      if ((p.z > 0) !== far) continue;
+      const x = p.x, y0 = projY(sc.floorY, p.z), y1 = projY(p.y, p.z);
+      ctx.strokeStyle = '#4A4E80'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+      ctx.fillStyle = '#FFD166'; ctx.beginPath(); ctx.arc(x, y1, 5, 0, 6.2832); ctx.fill(); ctx.lineCap = 'butt';
+    }
+  }
+  function drawRod() {
+    const d = S.scene.decor.rod; if (!d) return;
+    const g = ctx.createLinearGradient(0, d.y - 5, 0, d.y + 5);
+    g.addColorStop(0, '#F3E3B0'); g.addColorStop(0.5, '#C9A85A'); g.addColorStop(1, '#7A6230');
+    ctx.strokeStyle = g; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(d.x0, d.y); ctx.lineTo(d.x1, d.y); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.fillStyle = '#FFD166'; ctx.beginPath(); ctx.arc(d.x0, d.y, 9, 0, 6.2832); ctx.arc(d.x1, d.y, 9, 0, 6.2832); ctx.fill();
+  }
+  function drawPins() {
+    const np = S.np, rod = S.scene.decor.rod; let any = false;
+    ctx.beginPath();
+    for (let i = 0; i < np; i++) {
+      if (!pin[i]) continue; any = true;
+      if (rod) { ctx.moveTo(SX[i] + 5.5, SY[i] - 6); ctx.arc(SX[i], SY[i] - 6, 5.5, 0, 6.2832); }
+      else { ctx.moveTo(SX[i] + 2.6, SY[i]); ctx.arc(SX[i], SY[i], 2.6, 0, 6.2832); }
+    }
+    if (!any) return;
+    if (rod) { ctx.strokeStyle = '#FFD166'; ctx.lineWidth = 1.8; ctx.stroke(); } else { ctx.fillStyle = '#FFD166'; ctx.fill(); }
+  }
+  function drawTrail(now) {
+    while (trail.length && now - trail[0].t > 650) trail.shift();
+    if (trail.length < 2) return;
+    ctx.lineCap = 'round';
+    for (let i = 1; i < trail.length; i++) {
+      const a = trail[i - 1], b = trail[i]; if (a.s !== b.s) continue;
+      const k = 1 - (now - b.t) / 650; if (k <= 0) continue;
+      ctx.strokeStyle = 'rgba(255,209,102,' + (k * 0.95).toFixed(3) + ')'; ctx.lineWidth = 1 + 2.4 * k;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  function render(now) {
+    const sc = S.scene, k = dpr * scale;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(bg, 0, 0);
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    project(); sortBalls();
+    decorBack();
+    if (sc.tilt) {
+      const fyc = sc.pivotY + (sc.floorY - sc.pivotY) * sc.cT;
+      for (let b = 0; b < S.nb; b++) {
+        const hgt = Math.max(0, sc.floorY - by[b] - br[b]), a = Math.max(0.05, 0.42 - hgt * 0.0006), r = br[b] * (1 + hgt * 0.0005);
+        ctx.fillStyle = 'rgba(3,4,12,' + a.toFixed(3) + ')'; ctx.beginPath(); ctx.ellipse(bx[b], fyc - bz[b] * sc.sT, r, r * sc.sT, 0, 0, 6.2832); ctx.fill();
+      }
+    }
+    drawPosts(true);
+    for (const cl of S.cloths) if (!wire) clothShadow(cl);
+    drawRod();
+    if (S.cloths.length) { for (const cl of S.cloths) drawCloth(cl); drawFray(); }
+    else {
+      drawRopes();
+      for (const b of S.bodies) drawBody(b);
+      for (let i = 0; i < ballOrder.length; i++) drawBall(ballOrder[i]);
+    }
+    drawPins();
+    drawPosts(false);
+    drawTrail(now);
+    if (ptr && ptr.mode === 'grab' && ptr.held) { ctx.strokeStyle = 'rgba(237,230,214,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ptr.x, ptr.y, 16, 0, 6.2832); ctx.stroke(); }
+    if (fade > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(12,14,28,' + fade.toFixed(3) + ')'; ctx.fillRect(0, 0, cv.width, cv.height); }
+  }
+
+  // ---- stats and main loop ------------------------------------------------------------
+  let fpsAcc = 0, fpsN = 0, statT = 0, workAcc = 0, workN = 0;
+  const fmt = n => n.toLocaleString('en-US');
+  function stats(force) {
+    let alive = 0; for (let k = 0; k < S.nc; k++) alive += calive[k];
+    $('sP').textContent = fmt(S.np); $('sC').textContent = fmt(alive); $('sT').textContent = fmt(S.nc - alive);
+    if (!force && fpsN) $('sF').textContent = Math.round(fpsN / fpsAcc);
+    fpsAcc = 0; fpsN = 0;
+  }
+  function frame(now) {
+    requestAnimationFrame(frame);
+    let dt = (now - last) / 1000; last = now;
+    if (!(dt > 0)) dt = 1 / 60;
+    fpsAcc += dt; fpsN++;
+    if (dt > 1 / 30) dt = 1 / 30;
+    const t0 = performance.now();
+    if (!paused) {
+      acc += dt * 360 * (slow ? 1 / 3 : 1);
+      let n = acc | 0; acc -= n; if (n > 12) n = 12;
+      runAuto();
+      sim.advance(n);
+    } else sim.advance(0);
+    if (fade > 0) fade = Math.max(0, fade - dt * 3.2);
+    render(now);
+    workAcc += performance.now() - t0; workN++;
+    if (now - statT > 400) {
+      statT = now; stats(false);
+      if (workN > 40) { if (workAcc / workN > 19 && dprCap > 1) { dprCap = 1; measure(); } workAcc = 0; workN = 0; }
+    }
+  }
+  measure();
+  load('curtain');
+  requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>

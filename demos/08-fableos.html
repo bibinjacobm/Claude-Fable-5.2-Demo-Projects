@@ -1,0 +1,1882 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FableOS</title>
+<style>
+:root{
+  --accent:#F2A7C3; --teal:#7FD1C4; --gold:#F4D06F; --paper:#f6efe2; --night:#221f3a;
+  --spine-w:64px;
+  --ui:"Avenir Next","Segoe UI",system-ui,sans-serif;
+  --mono:Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --desk:#1c1a31; --ink:#f3ecdf; --dim:#a9a3c4; --sheet:#272543; --sheet2:#34315a;
+  --edge:#0c0b19; --field:#1d1b36; --shadow:#0b0a18; --spine:#121122; --rule:rgba(243,236,223,.14);
+}
+:root[data-theme="light"]{
+  --desk:#e7dcc6; --ink:#221f3a; --dim:#6a6485; --sheet:#fbf6ec; --sheet2:#efe4cf;
+  --edge:#221f3a; --field:#fffdf7; --shadow:#221f3a; --spine:#221f3a; --rule:rgba(34,31,58,.18);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--desk);color:var(--ink);font:14px/1.4 var(--ui)}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+#wall{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+#desk{position:fixed;left:var(--spine-w);top:0;right:0;bottom:0;z-index:1;overflow:hidden;user-select:none;-webkit-user-select:none}
+
+/* Desktop icons */
+#icons{position:absolute;inset:16px;display:flex;flex-direction:column;flex-wrap:wrap;align-content:flex-start;gap:4px;pointer-events:none}
+.dicon{pointer-events:auto;width:94px;padding:8px 4px 6px;border:0;border-radius:12px;background:none;cursor:default;display:flex;flex-direction:column;align-items:center;gap:5px}
+.dicon:hover{background:color-mix(in srgb,var(--ink) 9%,transparent)}
+.dicon.sel{background:color-mix(in srgb,var(--accent) 30%,transparent);box-shadow:inset 0 0 0 2px var(--accent)}
+.dicon.pop{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.dname{font-size:12px;font-weight:600;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.ficon{width:46px;height:46px;display:block;flex:none}
+.ficon svg{width:100%;height:100%;display:block}
+.f-fill{fill:var(--accent);stroke:var(--night);stroke-width:2.5;stroke-linejoin:round}
+.f-sheet{fill:var(--paper);stroke:var(--night);stroke-width:2.5;stroke-linejoin:round}
+.f-line{fill:none;stroke:var(--night);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.ficon.thumb{border:2.5px solid var(--night);border-radius:6px;overflow:hidden;background:var(--paper);height:36px;margin:5px 0}
+.ficon.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+@keyframes pop{from{transform:scale(.3);opacity:0}}
+
+/* Spine launcher */
+#spine{position:fixed;left:0;top:0;bottom:0;width:var(--spine-w);z-index:2;background:var(--spine);color:var(--paper);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px;user-select:none;-webkit-user-select:none}
+#spine::after{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:var(--accent)}
+.mark{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:700;font-size:16px;letter-spacing:.02em;padding:12px 8px;border:0;background:none;border-radius:10px;cursor:pointer;color:var(--paper)}
+.mark:hover,.mark[aria-expanded="true"]{background:rgba(255,255,255,.1)}
+.band{width:34px;height:7px;border-top:2px solid var(--accent);border-bottom:2px solid var(--accent);flex:none;opacity:.9}
+#apps{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0;overflow-y:auto;overflow-x:visible;padding:2px 0;scrollbar-width:none;align-items:center;width:100%}
+.app-btn{position:relative;width:42px;height:42px;flex:none;border:0;border-radius:13px;background:none;color:var(--paper);cursor:pointer;display:grid;place-items:center}
+.app-btn svg{width:22px;height:22px}
+.app-btn:hover{background:rgba(255,255,255,.1)}
+.app-btn.running::before{content:"";position:absolute;left:-7px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--accent)}
+.app-btn.active{background:var(--accent);color:var(--night)}
+#tip{position:fixed;z-index:4;left:calc(var(--spine-w) + 8px);padding:4px 10px;border-radius:8px;background:var(--paper);color:var(--night);font-size:12.5px;font-weight:600;border:2px solid var(--night);box-shadow:3px 3px 0 var(--shadow);pointer-events:none;display:none;white-space:nowrap}
+#clock{text-align:center;line-height:1.15;font-variant-numeric:tabular-nums}
+#clock b{display:block;font-size:15px}
+#clock span{font-size:11px;opacity:.7}
+#menu{position:fixed;z-index:3;left:calc(var(--spine-w) + 10px);top:12px;min-width:200px;padding:6px;border-radius:12px;background:var(--sheet);color:var(--ink);border:2px solid var(--edge);box-shadow:6px 6px 0 var(--shadow);display:none}
+#menu.open{display:block;animation:win-in .14s ease-out}
+#menu a,#menu button{display:flex;justify-content:space-between;gap:16px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:none;text-align:left;text-decoration:none;color:inherit;cursor:pointer;font-weight:600}
+#menu a:hover,#menu button:hover{background:var(--accent);color:var(--night)}
+#menu kbd{font:inherit;font-weight:400;opacity:.65}
+
+/* Windows */
+.win{position:absolute;display:flex;flex-direction:column;background:var(--sheet);color:var(--ink);border:2px solid var(--edge);border-radius:13px;box-shadow:6px 6px 0 var(--shadow);outline:none;transition:transform .22s cubic-bezier(.4,0,.7,.2),opacity .2s,box-shadow .12s;--mx:-300px;--my:0px}
+.win.focused{box-shadow:8px 8px 0 color-mix(in srgb,var(--accent) 72%,var(--night))}
+.win.opening{animation:win-in .17s cubic-bezier(.2,.9,.3,1.2)}
+.win.closing{transform:scale(.94);opacity:0;pointer-events:none;transition-duration:.14s}
+.win.mini{transform:translate(var(--mx),var(--my)) scale(.06);opacity:0;pointer-events:none}
+.win.gone{display:none}
+.win.glide{transition:left .18s,top .18s,width .18s,height .18s,box-shadow .12s}
+.win.maxed{border-radius:0;box-shadow:none}
+.win.maxed .rz{display:none}
+.win.dragging{transition:none}
+@keyframes win-in{from{transform:scale(.92) translateY(10px);opacity:0}}
+.win-head{flex:none;height:38px;display:flex;align-items:flex-end;padding:0 8px 0 10px;background:var(--sheet2);border-bottom:2px solid var(--edge);border-radius:11px 11px 0 0;cursor:grab;touch-action:none}
+.win.maxed .win-head{border-radius:0}
+.win.dragging .win-head{cursor:grabbing}
+.win-tab{display:flex;align-items:center;gap:7px;height:29px;max-width:calc(100% - 100px);padding:0 14px 0 9px;margin-bottom:-2px;background:var(--sheet);border:2px solid var(--edge);border-bottom-color:var(--sheet);border-radius:10px 10px 0 0;font-size:13px;font-weight:600;color:var(--dim)}
+.win.focused .win-tab{background:var(--accent);border-bottom-color:var(--edge);color:var(--night)}
+.win-ico{width:16px;height:16px;flex:none}
+.win-ico svg{width:16px;height:16px;display:block}
+.win-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.win-ctl{margin-left:auto;align-self:center;display:flex;gap:6px}
+.win-ctl button{width:22px;height:22px;padding:0;border:2px solid var(--edge);border-radius:50%;background:var(--sheet);cursor:pointer;position:relative}
+.win-ctl button:hover{background:var(--accent)}
+.win-ctl button::before,.win-ctl button::after{content:"";position:absolute;left:50%;top:50%;background:var(--ink)}
+.win-ctl button:hover::before,.win-ctl button:hover::after{background:var(--night)}
+.c-min::before{width:8px;height:2px;margin:-1px 0 0 -4px}
+.c-min::after{display:none}
+.win-ctl .c-max::before{width:8px;height:8px;margin:-4px 0 0 -4px;background:none;border:2px solid var(--ink);border-radius:2px}
+.win-ctl .c-max:hover::before{background:none;border-color:var(--night)}
+.c-max::after{display:none}
+.c-close::before,.c-close::after{width:10px;height:2px;margin:-1px 0 0 -5px}
+.c-close::before{transform:rotate(45deg)}
+.c-close::after{transform:rotate(-45deg)}
+.win-body{flex:1;min-height:0;position:relative;overflow:hidden;border-radius:0 0 11px 11px}
+.win.maxed .win-body{border-radius:0}
+.win-body.col{display:flex;flex-direction:column}
+.rz{position:absolute;z-index:5;touch-action:none}
+.rz-n{left:12px;right:12px;top:-5px;height:9px;cursor:ns-resize}
+.rz-s{left:12px;right:12px;bottom:-5px;height:9px;cursor:ns-resize}
+.rz-e{top:12px;bottom:12px;right:-5px;width:9px;cursor:ew-resize}
+.rz-w{top:12px;bottom:12px;left:-5px;width:9px;cursor:ew-resize}
+.rz-ne,.rz-nw,.rz-se,.rz-sw{width:16px;height:16px}
+.rz-ne{right:-5px;top:-5px;cursor:nesw-resize}
+.rz-nw{left:-5px;top:-5px;cursor:nwse-resize}
+.rz-se{right:-5px;bottom:-5px;cursor:nwse-resize}
+.rz-sw{left:-5px;bottom:-5px;cursor:nesw-resize}
+#snap{position:absolute;z-index:2147483000;display:none;border:2px dashed var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:12px;pointer-events:none;transition:left .1s,top .1s,width .1s,height .1s}
+
+/* Shared app parts */
+.bar{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-bottom:2px solid var(--rule)}
+.bar .gap{flex:1}
+.btn{padding:4px 11px;border:2px solid var(--edge);border-radius:9px;background:var(--sheet);font-weight:600;font-size:12.5px;cursor:pointer;box-shadow:2px 2px 0 var(--shadow);white-space:nowrap}
+.btn:hover{background:var(--sheet2)}
+.btn:active{transform:translate(2px,2px);box-shadow:none}
+.btn.on,.btn.primary{background:var(--accent);color:var(--night)}
+.btn:disabled{opacity:.45;cursor:default;box-shadow:none;transform:none}
+.status{flex:none;padding:5px 12px;font-size:12px;color:var(--dim);border-top:2px solid var(--rule);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:28px}
+.status.err{color:#ff8a7a}
+:root[data-theme="light"] .status.err{color:#b3261e}
+.stage{flex:1;min-height:0;min-width:0;position:relative;overflow:hidden}
+.stage canvas.fill{position:absolute;inset:0;width:100%;height:100%;display:block}
+.check{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600}
+.check input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);margin:0}
+.check input[type=range]{width:90px;accent-color:var(--accent)}
+.ask{position:absolute;inset:0;z-index:8;display:grid;place-items:center;background:color-mix(in srgb,var(--desk) 62%,transparent);border-radius:11px}
+.ask-box{width:min(320px,calc(100% - 32px));padding:14px;border-radius:12px;background:var(--sheet);border:2px solid var(--edge);box-shadow:5px 5px 0 var(--shadow);display:flex;flex-direction:column;gap:10px}
+.ask-title{font-weight:600}
+.ask-input{width:100%;padding:7px 9px;border:2px solid var(--edge);border-radius:8px;background:var(--field);user-select:text;-webkit-user-select:text}
+.ask-row{display:flex;justify-content:flex-end;gap:8px}
+
+/* Terminal */
+.term{background:#14132a;color:#e9e2d2;font:13px/1.5 var(--mono)}
+.term-scroll{position:absolute;inset:0;overflow-y:auto;padding:10px 12px;cursor:text}
+.term-out{user-select:text;-webkit-user-select:text}
+.term-line{white-space:pre-wrap;word-break:break-word;min-height:1.5em}
+.term-line.err{color:#ff9d8a}
+.term-line.dim{color:#8d88ad}
+.term-p,.term-art,.term-prompt{color:var(--accent)}
+.term-row{display:flex;white-space:pre}
+.term-in{flex:1;min-width:0;padding:0;border:0;outline:0;background:none;font:inherit;color:inherit;caret-color:var(--accent);user-select:text;-webkit-user-select:text}
+
+/* Files */
+.crumbs{display:flex;align-items:center;gap:2px;flex:1;min-width:120px;overflow:hidden;font-size:12.5px}
+.crumbs button{border:0;background:none;padding:3px 6px;border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap}
+.crumbs button:hover{background:var(--accent);color:var(--night)}
+.crumbs i{font-style:normal;opacity:.4}
+.file-grid{flex:1;min-height:0;overflow:auto;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:4px;align-content:start}
+.file-grid .dicon{width:auto}
+.empty{grid-column:1/-1;padding:28px 12px;text-align:center;color:var(--dim)}
+
+/* Notes */
+.note-area{flex:1;min-height:0;width:100%;resize:none;border:0;outline:0;padding:14px 16px;background:var(--field);color:var(--ink);font:14px/1.6 var(--ui);user-select:text;-webkit-user-select:text}
+
+/* Paint */
+.swatch{width:20px;height:20px;padding:0;border:2px solid var(--edge);border-radius:50%;cursor:pointer;flex:none}
+.swatch.on{box-shadow:0 0 0 2px var(--sheet),0 0 0 4px var(--accent)}
+.pick{width:26px;height:24px;padding:0;border:2px solid var(--edge);border-radius:7px;background:none;cursor:pointer}
+.size-dot{display:block;border-radius:50%;background:currentColor;margin:auto}
+.paint-stage{background:color-mix(in srgb,var(--desk) 55%,var(--sheet))}
+.paint-cv{position:absolute;border:2px solid var(--edge);box-shadow:4px 4px 0 var(--shadow);touch-action:none;cursor:crosshair;background:var(--paper)}
+
+/* Calculator */
+.calc{padding:12px;gap:10px}
+.calc-screen{flex:none;padding:10px 12px;border:2px solid var(--edge);border-radius:11px;background:var(--field);text-align:right;min-height:92px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
+.calc-hist{font-size:12px;color:var(--dim);min-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calc-expr{font-size:26px;font-weight:600;white-space:nowrap;overflow:hidden;min-height:36px}
+.calc-live{font-size:13px;color:var(--dim);min-height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calc-live.err{color:#ff8a7a}
+.calc-keys{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:7px}
+.calc-keys .btn{font-size:16px;padding:0}
+.calc-keys .op{background:var(--sheet2)}
+
+/* Monitor, settings, about */
+.pad{padding:14px;overflow:auto}
+.mon-top{flex:none;display:flex;align-items:baseline;gap:10px;padding:12px 14px 4px}
+.mon-top b{font-size:30px;font-variant-numeric:tabular-nums}
+.mon-top span{color:var(--dim);font-size:12.5px}
+.mon-graph{flex:none;height:96px;margin:0 14px;border:2px solid var(--edge);border-radius:10px;background:var(--field)}
+.mon-list{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:12px}
+.mon-list h3,.pad h3{margin:0 0 6px;font-size:13px}
+.mon-list ul{margin:0;padding:0;list-style:none}
+.mon-list li{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:13px;border-bottom:1px dashed var(--rule)}
+.mon-list li span{color:var(--dim)}
+.meter{height:12px;border:2px solid var(--edge);border-radius:7px;background:var(--field);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent);min-width:3px}
+.small{font-size:12.5px;color:var(--dim)}
+.set-row{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:18px;align-items:center}
+.wall-opt{padding:0;border:2px solid var(--edge);border-radius:10px;overflow:hidden;background:var(--field);cursor:pointer;box-shadow:2px 2px 0 var(--shadow);display:flex;flex-direction:column}
+.wall-opt canvas{display:block;width:112px;height:66px}
+.wall-opt span{padding:3px 0 4px;font-size:12px;font-weight:600;text-align:center}
+.wall-opt.on{box-shadow:0 0 0 3px var(--accent)}
+.set-row .swatch{width:28px;height:28px}
+.about{display:flex;flex-direction:column;gap:10px;line-height:1.5}
+.about h2{margin:0;font-size:30px;line-height:1.1}
+.about p{margin:0;max-width:44ch}
+.about dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:13px}
+.about dt{font-weight:600}
+.about dd{margin:0;color:var(--dim)}
+.about a{color:inherit;font-weight:600}
+
+/* Boot */
+#boot{position:fixed;inset:0;z-index:10;background:var(--night);color:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .32s,transform .32s}
+#boot.done{opacity:0;transform:scale(1.04);pointer-events:none}
+.boot-mark{font-size:clamp(44px,9vw,92px);font-weight:700;letter-spacing:-.01em;display:flex}
+.boot-mark span{display:inline-block;animation:rise .5s cubic-bezier(.2,.9,.3,1.3) both}
+.boot-mark span:nth-child(n+6){color:var(--accent)}
+.boot-bar{width:min(280px,60vw);height:8px;border:2px solid var(--paper);border-radius:6px;overflow:hidden}
+.boot-bar i{display:block;height:100%;background:var(--accent);transform-origin:left;animation:fill 1.05s cubic-bezier(.5,0,.3,1) both}
+.boot-line{font-size:13px;opacity:.75;min-height:1.4em}
+@keyframes rise{from{transform:translateY(.5em);opacity:0}}
+@keyframes fill{from{transform:scaleX(0)}}
+
+@media (max-width:640px){:root{--spine-w:54px}.dicon{width:80px}}
+@media (prefers-reduced-motion:reduce){
+  .win,.win.glide,#snap,#boot{transition:none}
+  .win.opening,.dicon.pop,#menu.open,.boot-mark span,.boot-bar i{animation:none}
+}
+</style>
+</head>
+<body>
+<canvas id="wall" aria-hidden="true"></canvas>
+
+<main id="desk" aria-label="Desktop">
+  <div id="icons"></div>
+  <div id="snap"></div>
+</main>
+
+<nav id="spine" aria-label="Launcher">
+  <button class="mark" id="markBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu" title="System menu">FableOS</button>
+  <div class="band" aria-hidden="true"></div>
+  <div id="apps"></div>
+  <div class="band" aria-hidden="true"></div>
+  <div id="clock" aria-label="Clock"><b id="clockT">00:00</b><span id="clockD"></span></div>
+</nav>
+<div id="tip" role="tooltip"></div>
+<div id="menu" role="menu">
+  <a href="../index.html" role="menuitem">← Showcase</a>
+  <button type="button" role="menuitem" data-act="about">About FableOS</button>
+  <button type="button" role="menuitem" data-act="cycle">Next window <kbd>Alt + `</kbd></button>
+  <button type="button" role="menuitem" data-act="restart">Restart</button>
+</div>
+
+<div id="boot" role="status">
+  <div class="boot-mark" aria-label="FableOS"><span>F</span><span>a</span><span>b</span><span>l</span><span>e</span><span>O</span><span>S</span></div>
+  <div class="boot-bar"><i></i></div>
+  <div class="boot-line" id="bootLine">Opening the cover</div>
+</div>
+
+<script>
+'use strict';
+/*<core>*/
+/* ---------- Core: virtual file system, shell, calculator (no DOM) ---------- */
+
+function createVFS(store, seed) {
+  const listeners = new Set();
+  let root = null;
+  const api = {};
+  const D = c => ({ t: 'd', c: c || {}, m: Date.now() });
+  const F = d => ({ t: 'f', d: d == null ? '' : String(d), m: Date.now() });
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const parts = p => p.split('/').filter(Boolean);
+  const base = p => { const a = parts(p); return a[a.length - 1] || ''; };
+  const dirname = p => { const a = parts(p); a.pop(); return '/' + a.join('/'); };
+
+  function norm(path, cwd) {
+    let p = String(path == null ? '' : path);
+    if (p === '') p = cwd || '/';
+    else if (p === '~') p = '/home';
+    else if (p.startsWith('~/')) p = '/home/' + p.slice(2);
+    else if (!p.startsWith('/')) p = (cwd || '/') + '/' + p;
+    const out = [];
+    for (const s of p.split('/')) {
+      if (!s || s === '.') continue;
+      if (s === '..') out.pop(); else out.push(s);
+    }
+    return '/' + out.join('/');
+  }
+  function node(p) {
+    let n = root;
+    for (const s of parts(p)) {
+      if (!n || n.t !== 'd' || !has(n.c, s)) return null;
+      n = n.c[s];
+    }
+    return n || null;
+  }
+  function fail(msg) { const e = new Error(msg); e.vfs = true; throw e; }
+  function need(p) { const n = node(p); if (!n) fail('no such file or folder: ' + p); return n; }
+  function parentFor(p) {
+    if (p === '/') fail('cannot change /');
+    const dn = dirname(p), d = node(dn);
+    if (!d) fail('no such folder: ' + dn);
+    if (d.t !== 'd') fail('not a folder: ' + dn);
+    const name = base(p);
+    if (name === '__proto__' || name.length > 80) fail('that name cannot be used: ' + name);
+    return d;
+  }
+  function build(obj) {
+    const d = D();
+    for (const k of Object.keys(obj)) d.c[k] = typeof obj[k] === 'string' ? F(obj[k]) : build(obj[k]);
+    return d;
+  }
+  function save() {
+    try { if (store) store.set(JSON.stringify(root)); api.saved = true; }
+    catch (e) { api.saved = false; }
+    return api.saved;
+  }
+  function changed(p) { save(); listeners.forEach(fn => { try { fn(p); } catch (e) {} }); }
+  const count = n => Object.keys(n.c).length;
+  const info = (name, n) => ({ name, type: n.t === 'd' ? 'dir' : 'file', size: n.t === 'd' ? count(n) : n.d.length, mtime: n.m });
+
+  Object.assign(api, {
+    saved: true, norm, base, dirname,
+    exists: p => !!node(p),
+    isDir: p => { const n = node(p); return !!n && n.t === 'd'; },
+    isFile: p => { const n = node(p); return !!n && n.t === 'f'; },
+    stat(p) { return info(base(p), need(p)); },
+    list(p) {
+      const n = need(p);
+      if (n.t !== 'd') fail('not a folder: ' + p);
+      return Object.keys(n.c).map(k => info(k, n.c[k]))
+        .sort((a, b) => a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : a.name.localeCompare(b.name));
+    },
+    read(p) { const n = need(p); if (n.t !== 'f') fail('is a folder: ' + p); return n.d; },
+    write(p, data, append) {
+      const ex = node(p);
+      if (ex) {
+        if (ex.t !== 'f') fail('is a folder: ' + p);
+        ex.d = append ? ex.d + String(data) : String(data); ex.m = Date.now();
+      } else parentFor(p).c[base(p)] = F(data);
+      changed(p);
+    },
+    mkdir(p, deep) {
+      const ex = node(p);
+      if (ex) { if (deep && ex.t === 'd') return; fail('already exists: ' + p); }
+      if (deep) {
+        let cur = '';
+        for (const s of parts(p)) {
+          cur += '/' + s;
+          const n = node(cur);
+          if (!n) parentFor(cur).c[s] = D();
+          else if (n.t !== 'd') fail('not a folder: ' + cur);
+        }
+      } else parentFor(p).c[base(p)] = D();
+      changed(p);
+    },
+    touch(p) { const n = node(p); if (n) { n.m = Date.now(); changed(p); } else api.write(p, ''); },
+    rm(p, recursive) {
+      if (p === '/') fail('cannot remove /');
+      const n = need(p);
+      if (n.t === 'd' && !recursive) fail('is a folder: ' + p + ' (use rm -r)');
+      delete node(dirname(p)).c[base(p)];
+      changed(p);
+    },
+    cp(src, dst, recursive) {
+      if (src === '/') fail('cannot copy /');
+      const n = need(src);
+      if (n.t === 'd' && !recursive) fail('is a folder: ' + src + ' (use cp -r)');
+      let target = dst; const dn = node(dst);
+      if (dn && dn.t === 'd') target = norm(base(src), dst);
+      if (target === src) fail('source and destination are the same');
+      if (n.t === 'd' && (target + '/').startsWith(src + '/')) fail('cannot copy a folder into itself');
+      const ex = node(target);
+      if (ex && (ex.t === 'd' || n.t === 'd')) fail('already exists: ' + target);
+      const par = parentFor(target);
+      const copy = JSON.parse(JSON.stringify(n)); copy.m = Date.now();
+      par.c[base(target)] = copy;
+      changed(target); return target;
+    },
+    mv(src, dst) {
+      if (src === '/') fail('cannot move /');
+      const n = need(src);
+      let target = dst; const dn = node(dst);
+      if (dn && dn.t === 'd' && dst !== src) target = norm(base(src), dst);
+      if (target === src) return target;
+      if ((target + '/').startsWith(src + '/')) fail('cannot move a folder into itself');
+      const ex = node(target);
+      if (ex && (ex.t === 'd' || n.t === 'd')) fail('already exists: ' + target);
+      const par = parentFor(target);
+      delete node(dirname(src)).c[base(src)];
+      par.c[base(target)] = n; n.m = Date.now();
+      changed(target); return target;
+    },
+    size() { return JSON.stringify(root).length; },
+    count() {
+      let files = 0, dirs = -1;
+      (function walk(n) { if (n.t === 'd') { dirs++; for (const k of Object.keys(n.c)) walk(n.c[k]); } else files++; })(root);
+      return { files, dirs };
+    },
+    on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    reset() { root = build(seed ? seed() : {}); changed('/'); },
+    load() {
+      try {
+        const s = store && store.get();
+        if (s) { const r = JSON.parse(s); if (r && r.t === 'd' && r.c) { root = r; return true; } }
+      } catch (e) {}
+      root = build(seed ? seed() : {}); save();
+      return false;
+    }
+  });
+  return api;
+}
+
+function treeLines(vfs, p) {
+  const lines = []; let dirs = 0, files = 0;
+  (function walk(path, prefix) {
+    const items = vfs.list(path);
+    items.forEach((it, i) => {
+      const last = i === items.length - 1;
+      lines.push(prefix + (last ? '└── ' : '├── ') + it.name + (it.type === 'dir' ? '/' : ''));
+      if (it.type === 'dir') { dirs++; walk(vfs.norm(it.name, path), prefix + (last ? '    ' : '│   ')); }
+      else files++;
+    });
+  })(p, '');
+  return { lines, dirs, files };
+}
+
+function tokenize(line) {
+  const toks = []; let cur = '', has = false, i = 0, q = null;
+  const push = () => { if (has) { toks.push({ v: cur }); cur = ''; has = false; } };
+  while (i < line.length) {
+    const ch = line[i];
+    if (q) {
+      if (ch === q) q = null;
+      else if (ch === '\\' && q === '"' && i + 1 < line.length && '"\\'.includes(line[i + 1])) cur += line[++i];
+      else cur += ch;
+      i++; continue;
+    }
+    if (ch === '"' || ch === "'") { q = ch; has = true; i++; continue; }
+    if (ch === '\\' && i + 1 < line.length) { cur += line[++i]; has = true; i++; continue; }
+    if (ch === ' ' || ch === '\t') { push(); i++; continue; }
+    if (ch === '>') { push(); if (line[i + 1] === '>') { toks.push({ op: '>>' }); i += 2; } else { toks.push({ op: '>' }); i++; } continue; }
+    if (ch === ';') { push(); toks.push({ op: ';' }); i++; continue; }
+    if (ch === '&' && line[i + 1] === '&') { push(); toks.push({ op: '&&' }); i += 2; continue; }
+    cur += ch; has = true; i++;
+  }
+  if (q) throw new Error('a quote was left open');
+  push();
+  return toks;
+}
+
+function parseLine(line) {
+  const toks = tokenize(line), cmds = [];
+  let cur = { argv: [], redirect: null, sep: null };
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.op === '>' || t.op === '>>') {
+      const f = toks[i + 1];
+      if (!f || f.op) throw new Error('expected a file name after ' + t.op);
+      cur.redirect = { op: t.op, file: f.v }; i++;
+    } else if (t.op) {
+      if (!cur.argv.length && !cur.redirect) throw new Error('unexpected ' + t.op);
+      cur.sep = t.op; cmds.push(cur); cur = { argv: [], redirect: null, sep: null };
+    } else cur.argv.push(t.v);
+  }
+  if (cur.argv.length || cur.redirect) cmds.push(cur);
+  return cmds;
+}
+
+function calcEval(src) {
+  const s = String(src); let i = 0;
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const fns = { sqrt: Math.sqrt, sin: Math.sin, cos: Math.cos, tan: Math.tan, ln: Math.log, log: Math.log10, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil };
+  const consts = { pi: Math.PI, 'π': Math.PI, e: Math.E };
+  const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+  function expr() {
+    let v = term();
+    for (;;) {
+      ws(); const c = s[i];
+      if (c === '+') { i++; v += term(); }
+      else if (c === '-' || c === '−') { i++; v -= term(); }
+      else return v;
+    }
+  }
+  function term() {
+    let v = unary();
+    for (;;) {
+      ws(); const c = s[i];
+      if (c === '*' || c === '×') { i++; v *= unary(); }
+      else if (c === '/' || c === '÷') { i++; const d = unary(); if (d === 0) throw new Error('cannot divide by zero'); v /= d; }
+      else if (c === '%') { i++; const d = unary(); if (d === 0) throw new Error('cannot divide by zero'); v %= d; }
+      else return v;
+    }
+  }
+  function unary() {
+    ws(); const c = s[i];
+    if (c === '-' || c === '−') { i++; return -unary(); }
+    if (c === '+') { i++; return unary(); }
+    return power();
+  }
+  function power() {
+    const b = primary(); ws();
+    if (s[i] === '^') { i++; return Math.pow(b, unary()); }
+    return b;
+  }
+  function primary() {
+    ws(); const c = s[i];
+    if (i >= s.length) throw new Error('the sum is not finished');
+    if (c === '(') {
+      i++; const v = expr(); ws();
+      if (s[i] !== ')') throw new Error('a bracket is not closed');
+      i++; return v;
+    }
+    const num = /^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(s.slice(i));
+    if (num) { i += num[0].length; return parseFloat(num[0]); }
+    const id = /^[a-zπ√]+/i.exec(s.slice(i));
+    if (id) {
+      let name = id[0].toLowerCase(); i += id[0].length;
+      if (name === '√') name = 'sqrt';
+      if (own(fns, name)) {
+        ws(); if (s[i] !== '(') throw new Error(name + ' needs brackets, like ' + name + '(9)');
+        i++; const v = expr(); ws();
+        if (s[i] !== ')') throw new Error('a bracket is not closed');
+        i++; return fns[name](v);
+      }
+      if (own(consts, name)) return consts[name];
+      throw new Error('unknown name: ' + id[0]);
+    }
+    throw new Error('unexpected "' + c + '"');
+  }
+  ws(); if (i >= s.length) throw new Error('nothing to calculate');
+  const v = expr(); ws();
+  if (i < s.length) throw new Error('unexpected "' + s[i] + '"');
+  if (!isFinite(v)) throw new Error('the result is not a real number');
+  return parseFloat(v.toPrecision(12));
+}
+function calcFormat(v) {
+  const a = Math.abs(v);
+  if (a !== 0 && (a >= 1e12 || a < 1e-9)) return v.toExponential(6).replace(/\.?0+e/, 'e');
+  return String(v);
+}
+
+const ART_W = 24;
+const ART = [
+  '    _______   _______',
+  '   /       \\ /       \\',
+  '  |  ~~~~~  |  ~~~~~  |',
+  '  |  ~~~    |  ~~~~   |',
+  '  |  ~~~~~  |  ~~     |',
+  '  |________/ \\________|'
+];
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+function createShell(vfs, env) {
+  env = env || {};
+  let cwd = '/home';
+  const history = [];
+  const cmds = {};
+  const abs = p => vfs.norm(p, cwd);
+  const show = p => p === '/home' ? '~' : p.startsWith('/home/') ? '~' + p.slice(5) : p;
+  const def = (name, usage, help, fn) => { cmds[name] = { usage, help, fn }; };
+  const fmtDate = m => new Date(m).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  function flags(args, allowed) {
+    const f = {}, rest = [];
+    for (const a of args) {
+      if (a.length > 1 && a[0] === '-' && !rest.length) {
+        for (const ch of a.slice(1)) { if (!allowed.includes(ch)) throw new Error('unknown option -' + ch); f[ch] = true; }
+      } else rest.push(a);
+    }
+    return { f, rest };
+  }
+  const settle = () => { while (!vfs.isDir(cwd)) cwd = vfs.dirname(cwd); };
+  const want = (a, n, usage) => { if (a.length < n) throw new Error('usage: ' + usage); };
+
+  def('help', 'help', 'list every command', () => {
+    const names = Object.keys(cmds).sort();
+    const w = Math.max.apply(null, names.map(n => cmds[n].usage.length));
+    return names.map(n => cmds[n].usage.padEnd(w + 2) + cmds[n].help).join('\n') +
+      '\n\nTab completes names. Up and down recall history.\nUse > or >> to write output into a file.';
+  });
+  def('pwd', 'pwd', 'show the current folder', () => cwd);
+  def('cd', 'cd [folder]', 'move to a folder', a => {
+    const p = abs(a[0] || '~');
+    if (!vfs.exists(p)) throw new Error('no such folder: ' + a[0]);
+    if (!vfs.isDir(p)) throw new Error('not a folder: ' + a[0]);
+    cwd = p;
+  });
+  def('ls', 'ls [-l] [path]', 'list a folder', a => {
+    const { f, rest } = flags(a, 'la');
+    const targets = rest.length ? rest : ['.'];
+    return targets.map(tg => {
+      const p = abs(tg), st = vfs.stat(p);
+      const items = st.type === 'file' ? [st] : vfs.list(p);
+      const text = f.l
+        ? items.map(it => (it.type === 'dir' ? 'd ' : '- ') + (it.type === 'dir' ? it.size + ' items' : fmtSize(it.size)).padStart(10) + '  ' + fmtDate(it.mtime) + '  ' + it.name + (it.type === 'dir' ? '/' : '')).join('\n')
+        : items.map(it => it.name + (it.type === 'dir' ? '/' : '')).join('  ');
+      return (targets.length > 1 ? tg + ':\n' : '') + text;
+    }).join(targets.length > 1 ? '\n\n' : '\n');
+  });
+  def('cat', 'cat <file>...', 'print files', a => {
+    want(a, 1, 'cat <file>');
+    return a.map(x => {
+      const d = vfs.read(abs(x));
+      return d.startsWith('data:image/') ? '[picture, ' + fmtSize(d.length) + '. Try: open ' + x + ']' : d.replace(/\n$/, '');
+    }).join('\n');
+  });
+  def('mkdir', 'mkdir [-p] <folder>...', 'make folders', a => {
+    const { f, rest } = flags(a, 'p'); want(rest, 1, 'mkdir <folder>');
+    rest.forEach(x => vfs.mkdir(abs(x), !!f.p));
+  });
+  def('touch', 'touch <file>...', 'make empty files', a => { want(a, 1, 'touch <file>'); a.forEach(x => vfs.touch(abs(x))); });
+  def('rm', 'rm [-r] <path>...', 'remove files or folders', a => {
+    const { f, rest } = flags(a, 'rf'); want(rest, 1, 'rm <path>');
+    for (const x of rest) {
+      const p = abs(x);
+      if (!vfs.exists(p)) { if (f.f) continue; throw new Error('no such file or folder: ' + x); }
+      vfs.rm(p, !!f.r);
+    }
+    settle();
+  });
+  def('mv', 'mv <from> <to>', 'move or rename', a => { want(a, 2, 'mv <from> <to>'); vfs.mv(abs(a[0]), abs(a[1])); settle(); });
+  def('cp', 'cp [-r] <from> <to>', 'copy', a => { const { f, rest } = flags(a, 'r'); want(rest, 2, 'cp <from> <to>'); vfs.cp(abs(rest[0]), abs(rest[1]), !!f.r); });
+  def('echo', 'echo <text>', 'print text', a => a.join(' '));
+  def('tree', 'tree [folder]', 'draw a folder as a tree', a => {
+    const p = abs(a[0] || '.');
+    if (!vfs.isDir(p)) throw new Error('not a folder: ' + (a[0] || '.'));
+    const t = treeLines(vfs, p);
+    return [show(p)].concat(t.lines, ['', t.dirs + (t.dirs === 1 ? ' folder, ' : ' folders, ') + t.files + (t.files === 1 ? ' file' : ' files')]).join('\n');
+  });
+  def('clear', 'clear', 'wipe the screen', (a, ctx) => { ctx.res.clear = true; ctx.res.out.length = 0; });
+  def('history', 'history', 'show past commands', () => history.map((h, i) => String(i + 1).padStart(3) + '  ' + h).join('\n'));
+  def('date', 'date', 'show the date and time', () => String(env.now ? env.now() : new Date()));
+  def('whoami', 'whoami', 'show the current user', () => env.user || 'guest');
+  def('sysinfo', 'sysinfo', 'show system details', () => {
+    const c = vfs.count();
+    const rows = [
+      (env.user || 'guest') + '@fableos',
+      '-------------',
+      'System    FableOS 1.0',
+      'Host      one browser tab',
+      'Shell     fable-sh',
+      'Screen    ' + (env.screen ? env.screen() : 'unknown'),
+      'Windows   ' + (env.windows ? env.windows() : 0) + ' open',
+      'Files     ' + c.files + ' in ' + c.dirs + ' folders',
+      'Storage   ' + fmtSize(vfs.size()) + ' used',
+      'Uptime    ' + (env.uptime ? env.uptime() : 0) + ' s'
+    ];
+    const n = Math.max(rows.length, ART.length), out = [];
+    for (let i = 0; i < n; i++) out.push((ART[i] || '').padEnd(ART_W) + (rows[i] || ''));
+    return { text: out.join('\n'), cls: 'art' };
+  });
+  def('open', 'open <app or path>', 'open an app, file or folder', a => {
+    want(a, 1, 'open <app or path>');
+    if (!env.open) throw new Error('there is no desktop to open things on');
+    return env.open(a[0], abs(a[0]));
+  });
+  def('apps', 'apps', 'list apps you can open', () => (env.apps ? env.apps() : []).join('  '));
+  def('calc', 'calc <sum>', 'work out a sum', a => { want(a, 1, 'calc <sum>'); return calcFormat(calcEval(a.join(' '))); });
+
+  function run(c, res) {
+    const name = c.argv[0]; let text = '', cls = '';
+    try {
+      if (name) {
+        if (!Object.prototype.hasOwnProperty.call(cmds, name)) throw new Error('command not found (try help)');
+        const r = cmds[name].fn(c.argv.slice(1), { res });
+        if (r && typeof r === 'object') { text = r.text; cls = r.cls || ''; }
+        else text = r == null ? '' : String(r);
+      }
+      if (c.redirect) vfs.write(abs(c.redirect.file), text === '' ? '' : text + '\n', c.redirect.op === '>>');
+      else if (text !== '') res.out.push({ text, cls });
+      return true;
+    } catch (e) {
+      res.out.push({ text: (name || 'fable') + ': ' + e.message, cls: 'err' });
+      return false;
+    }
+  }
+  function exec(line) {
+    const res = { out: [], clear: false, ok: true };
+    const trimmed = String(line).trim();
+    if (trimmed) history.push(trimmed);
+    let list;
+    try { list = parseLine(String(line)); }
+    catch (e) { res.out.push({ text: 'fable: ' + e.message, cls: 'err' }); res.ok = false; return res; }
+    let ok = true, prevSep = null;
+    for (const c of list) {
+      if (prevSep === '&&' && !ok) { prevSep = c.sep; continue; }
+      ok = run(c, res); prevSep = c.sep;
+    }
+    res.ok = ok;
+    return res;
+  }
+  const esc = s => s.replace(/([ '"\\;&>])/g, '\\$1');
+  function complete(line) {
+    const m = /((?:\\.|[^\s\\])*)$/.exec(line);
+    const raw = m ? m[1] : '';
+    const head = line.slice(0, line.length - raw.length);
+    const frag = raw.replace(/\\(.)/g, '$1');
+    const isCmd = !head.trim() || /(;|&&)\s*$/.test(head);
+    let cands = [], prefix = '';
+    if (isCmd) {
+      cands = Object.keys(cmds).filter(c => c.startsWith(frag)).sort().map(c => ({ name: c, suffix: ' ' }));
+    } else {
+      const slash = frag.lastIndexOf('/');
+      const namePart = frag.slice(slash + 1);
+      prefix = slash >= 0 ? frag.slice(0, slash + 1) : '';
+      try {
+        cands = vfs.list(prefix === '' ? cwd : abs(prefix)).filter(it => it.name.startsWith(namePart))
+          .map(it => ({ name: it.name, suffix: it.type === 'dir' ? '/' : ' ' }));
+      } catch (e) { cands = []; }
+      if (/^\s*open\s+$/.test(head) && prefix === '' && env.apps) {
+        for (const a of env.apps()) if (a.startsWith(namePart) && !cands.some(c => c.name === a)) cands.push({ name: a, suffix: ' ' });
+      }
+    }
+    if (!cands.length) return { line, options: [] };
+    if (cands.length === 1) return { line: head + esc(prefix + cands[0].name) + cands[0].suffix, options: [] };
+    let common = cands[0].name;
+    for (const c of cands) while (!c.name.startsWith(common)) common = common.slice(0, -1);
+    return { line: head + esc(prefix + common), options: cands.map(c => c.name + (c.suffix === '/' ? '/' : '')) };
+  }
+  return { exec, complete, history, cwd: () => cwd, where: () => show(cwd), commands: () => Object.keys(cmds) };
+}
+
+function seedFS() {
+  return {
+    home: {
+      'readme.txt':
+        'Welcome to FableOS\n\n' +
+        'This whole desktop is one HTML file. The windows, the file system,\n' +
+        'the terminal and every app were written from scratch. There are no\n' +
+        'libraries and no image files.\n\n' +
+        'Things to try\n' +
+        '  - Drag a window to the left or right edge to snap it to half the screen.\n' +
+        '  - Type  echo hi > desktop/note.txt  in the Terminal and watch the desktop.\n' +
+        '  - Draw something in Paint, save it, then find it in Files.\n' +
+        '  - Press Alt + ` to step through open windows.\n\n' +
+        'Everything you save stays in this browser.\n',
+      desktop: {
+        'welcome.txt': 'Hello.\n\nThis icon is a real file at /home/desktop/welcome.txt.\nAnything saved into that folder shows up on the desktop straight away.\n',
+        projects: {
+          'todo.txt': '[x] Boot in under two seconds\n[x] Windows that snap\n[x] A terminal that can find its own files\n[ ] Teach the chimes a second song\n'
+        }
+      },
+      notes: {
+        'haiku.txt': 'One tab, a whole desk.\nWindows drift like paper boats.\nNothing was installed.\n',
+        'ideas.txt': 'Ideas for later\n\n1. A wallpaper that follows the weather\n2. Folders that remember where you left them\n3. A calculator that shows its working\n'
+      },
+      pictures: {}
+    },
+    system: {
+      'about.txt': 'FableOS 1.0\nA desktop written as a single page.\nApps: Terminal, Files, Notes, Paint, Calculator, Orbit chimes, System monitor, Settings.\n',
+      'shortcuts.txt': 'Alt + `          next window\nDouble-click bar  maximise or restore\nDrag to an edge   snap to half the screen\nCtrl or Cmd + S   save in Notes\nCtrl or Cmd + Z   undo in Paint\n'
+    }
+  };
+}
+/*</core>*/
+
+/* ---------- Desktop ---------- */
+(function () {
+  const $ = (s, r) => (r || document).querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const tbtn = (label, cls) => { const b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; return b; };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const TAU = Math.PI * 2;
+  const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bootTime = performance.now();
+  const lsStore = key => ({
+    get() { try { return localStorage.getItem(key); } catch (e) { return null; } },
+    set(v) { localStorage.setItem(key, v); }
+  });
+
+  /* Settings */
+  const ACCENTS = [['#F2A7C3', 'Rose'], ['#7FD1C4', 'Lagoon'], ['#F4D06F', 'Honey'], ['#FF8A5B', 'Ember'], ['#A6B1FF', 'Dusk'], ['#B8E986', 'Fern']];
+  const settingsStore = lsStore('fableos.settings.v1');
+  const settings = { wall: 'dunes', accent: '#F2A7C3', theme: 'dark' };
+  try {
+    const s = JSON.parse(settingsStore.get() || '{}');
+    if (['dunes', 'orrery', 'weave'].includes(s.wall)) settings.wall = s.wall;
+    if (ACCENTS.some(a => a[0] === s.accent)) settings.accent = s.accent;
+    if (s.theme === 'light' || s.theme === 'dark') settings.theme = s.theme;
+  } catch (e) {}
+  const pal = { desk: '#1c1a31', ink: '#f3ecdf', accent: '#F2A7C3', teal: '#7FD1C4', gold: '#F4D06F', dim: '#a9a3c4' };
+  const settingsListeners = new Set();
+  let wallDirty = true;
+  function applySettings(persist) {
+    const root = document.documentElement;
+    root.dataset.theme = settings.theme;
+    root.style.setProperty('--accent', settings.accent);
+    const cs = getComputedStyle(root);
+    for (const k of ['desk', 'ink', 'teal', 'gold', 'dim']) pal[k] = cs.getPropertyValue('--' + k).trim() || pal[k];
+    pal.accent = settings.accent;
+    wallDirty = true;
+    if (persist) { try { settingsStore.set(JSON.stringify(settings)); } catch (e) {} }
+    settingsListeners.forEach(fn => { try { fn(); } catch (e) {} });
+  }
+
+  /* One animation loop for everything */
+  const Ticker = (() => {
+    const subs = new Set(), frames = new Float32Array(120);
+    let fi = 0, last = performance.now(), fps = 60;
+    function loop(t) {
+      const dt = Math.min(100, Math.max(0, t - last)); last = t;
+      frames[fi++ % 120] = dt;
+      if (dt > 0) fps += (1000 / dt - fps) * 0.08;
+      subs.forEach(fn => { try { fn(t, dt); } catch (e) { subs.delete(fn); console.error(e); } });
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+    return { add(fn) { subs.add(fn); return () => subs.delete(fn); }, frames, get index() { return fi; }, get fps() { return fps; } };
+  })();
+
+  /* Wallpapers */
+  const rnd = n => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
+  const WALLS = {
+    dunes(c, w, h, t, p) {
+      c.fillStyle = p.desk; c.fillRect(0, 0, w, h);
+      c.fillStyle = p.ink;
+      for (let i = 0; i < 80; i++) {
+        const a = 0.3 + 0.35 * Math.sin(t * 0.001 * (0.5 + rnd(i + 7)) + i);
+        c.globalAlpha = Math.max(0, a) * 0.8;
+        c.fillRect(rnd(i) * w, rnd(i + 100) * h * 0.55, 1.6, 1.6);
+      }
+      c.globalAlpha = 1;
+      const m = Math.min(w, h), cx = w * 0.7, cy = h * 0.34, R = m * 0.17;
+      c.fillStyle = p.accent; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+      c.fillStyle = p.desk;
+      for (let i = 0; i < 5; i++) c.fillRect(cx - R, cy + R * (0.15 + i * 0.18), R * 2, 2 + i * 1.6);
+      const N = 15, step = 12, ys = [];
+      for (let i = 0; i < N; i++) {
+        const k = i / (N - 1), y0 = h * (0.44 + k * 0.62), amp = m * (0.02 + k * 0.055);
+        ys.length = 0;
+        for (let x = 0; x <= w + step; x += step)
+          ys.push(y0 + Math.sin(x * 0.0032 * (1 + k * 0.4) + t * 0.00012 * (1 + i * 0.3) + i * 1.7) * amp + Math.sin(x * 0.0091 - t * 0.00021 + i * 0.9) * amp * 0.35);
+        c.beginPath(); c.moveTo(0, h);
+        for (let j = 0; j < ys.length; j++) c.lineTo(j * step, ys[j]);
+        c.lineTo(w + step, h); c.closePath(); c.fillStyle = p.desk; c.fill();
+        c.beginPath();
+        for (let j = 0; j < ys.length; j++) { if (j) c.lineTo(j * step, ys[j]); else c.moveTo(0, ys[0]); }
+        c.strokeStyle = i % 5 === 2 ? p.teal : i % 5 === 4 ? p.gold : p.ink;
+        c.globalAlpha = 0.2 + k * 0.5; c.lineWidth = 1.5; c.stroke(); c.globalAlpha = 1;
+      }
+    },
+    orrery(c, w, h, t, p) {
+      c.fillStyle = p.desk; c.fillRect(0, 0, w, h);
+      const m = Math.min(w, h), cols = [p.ink, p.teal, p.accent, p.gold];
+      c.save(); c.translate(w * 0.6, h * 0.52); c.rotate(-0.32);
+      for (let i = 0; i < 8; i++) {
+        const rx = m * (0.12 + i * 0.085), ry = rx * 0.42;
+        const a = t * 0.0021 / Math.pow(1 + i * 0.55, 1.5) + i * 2.1;
+        c.strokeStyle = p.ink; c.globalAlpha = 0.17; c.lineWidth = 1.2;
+        c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TAU); c.stroke();
+        c.globalAlpha = 0.8; c.strokeStyle = cols[i % 4]; c.lineWidth = 2;
+        c.beginPath(); c.ellipse(0, 0, rx, ry, 0, a - 0.9, a); c.stroke();
+        c.globalAlpha = 1; c.fillStyle = cols[i % 4];
+        c.beginPath(); c.arc(Math.cos(a) * rx, Math.sin(a) * ry, 3 + ((i * 3) % 5), 0, TAU); c.fill();
+      }
+      c.fillStyle = p.accent; c.beginPath(); c.arc(0, 0, m * 0.055, 0, TAU); c.fill();
+      c.restore();
+    },
+    weave(c, w, h, t, p) {
+      c.fillStyle = p.desk; c.fillRect(0, 0, w, h);
+      const s = Math.max(20, Math.min(34, w / 14)), L = s * 0.32;
+      const paths = [new Path2D(), new Path2D(), new Path2D()];
+      for (let y = s / 2; y < h; y += s) for (let x = s / 2; x < w; x += s) {
+        const a = Math.sin(x * 0.0042 + t * 0.00023) * Math.cos(y * 0.0051 - t * 0.00017) * Math.PI + Math.sin((x + y) * 0.002 + t * 0.0001);
+        const dx = Math.cos(a) * L, dy = Math.sin(a) * L;
+        const k = Math.cos(a) > 0.72 ? 1 : Math.sin(a) > 0.86 ? 2 : 0;
+        paths[k].moveTo(x - dx, y - dy); paths[k].lineTo(x + dx, y + dy);
+      }
+      c.lineCap = 'round'; c.lineWidth = 2;
+      c.globalAlpha = 0.3; c.strokeStyle = p.ink; c.stroke(paths[0]);
+      c.globalAlpha = 0.95; c.strokeStyle = p.accent; c.stroke(paths[1]);
+      c.strokeStyle = p.teal; c.stroke(paths[2]);
+      c.globalAlpha = 1; c.lineCap = 'butt';
+    }
+  };
+  const WALL_NAMES = { dunes: 'Dunes', orrery: 'Orrery', weave: 'Weave' };
+  const wall = $('#wall'), wctx = wall.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  function sizeWall() {
+    DPR = Math.min(1.5, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    wall.width = Math.round(W * DPR); wall.height = Math.round(H * DPR);
+    wallDirty = true;
+  }
+  Ticker.add(t => {
+    if (REDUCED && !wallDirty) return;
+    wallDirty = false;
+    wctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    WALLS[settings.wall](wctx, W, H, REDUCED ? 4000 : t, pal);
+  });
+
+  /* File system */
+  const DESKTOP = '/home/desktop';
+  const vfs = createVFS(lsStore('fableos.vfs.v1'), seedFS);
+  function seedPictures() {
+    try {
+      const cv = document.createElement('canvas'); cv.width = 720; cv.height = 450;
+      WALLS.dunes(cv.getContext('2d'), 720, 450, 4000, { desk: '#221f3a', ink: '#f6efe2', accent: '#F2A7C3', teal: '#7FD1C4', gold: '#F4D06F' });
+      const url = cv.toDataURL('image/png');
+      if (vfs.isDir('/home/pictures')) vfs.write('/home/pictures/dunes.png', url);
+      if (vfs.isDir(DESKTOP)) vfs.write(DESKTOP + '/dunes.png', url);
+    } catch (e) {}
+  }
+
+  function fileIcon(path, type) {
+    const box = el('span', 'ficon');
+    if (type === 'dir') {
+      box.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path class="f-fill" d="M5 11h14l4 5h20v23H5z"/><path class="f-line" d="M5 21h38"/></svg>';
+    } else {
+      let d = ''; try { d = vfs.read(path); } catch (e) {}
+      if (d.startsWith('data:image/')) {
+        const im = el('img'); im.alt = ''; im.draggable = false; im.src = d;
+        box.classList.add('thumb'); box.append(im);
+      } else {
+        box.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path class="f-sheet" d="M11 5h18l9 9v29H11z"/><path class="f-line" d="M29 5v9h9M17 23h14M17 29h14M17 35h8"/></svg>';
+      }
+    }
+    return box;
+  }
+
+  /* Window manager */
+  const desk = $('#desk'), snapEl = $('#snap');
+  const APPS = {};
+  const ORDER = ['terminal', 'files', 'notes', 'paint', 'calc', 'chimes', 'monitor', 'settings'];
+  const GLYPHS = {
+    terminal: '<path d="M5 7l5 5-5 5M12 17h7"/>',
+    files: '<path d="M3 6h7l2 3h9v10H3z"/>',
+    notes: '<path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"/>',
+    paint: '<path d="M14 4l6 6-9 9H5v-6z"/><path d="M12 6l6 6"/>',
+    calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/>',
+    chimes: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l6.4-6.4"/>',
+    monitor: '<path d="M3 13h4l2-7 4 13 2-6h6"/>',
+    settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    about: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>'
+  };
+  const glyph = id => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (GLYPHS[id] || '') + '</svg>';
+  const WM = { wins: [], z: 20, seq: 0, focused: null };
+  const spineBtns = {};
+  const A = () => ({ w: desk.clientWidth, h: desk.clientHeight });
+
+  function rectOf(win) {
+    const a = A();
+    if (win.max) return { x: 0, y: 0, w: a.w, h: a.h };
+    if (win.snap === 'left') return { x: 0, y: 0, w: Math.floor(a.w / 2), h: a.h };
+    if (win.snap === 'right') { const l = Math.floor(a.w / 2); return { x: l, y: 0, w: a.w - l, h: a.h }; }
+    return { x: win.x, y: win.y, w: win.w, h: win.h };
+  }
+  function layout(win, glide) {
+    const r = rectOf(win), s = win.el.style;
+    if (glide && !REDUCED) { win.el.classList.add('glide'); win.timeout(() => win.el.classList.remove('glide'), 220); }
+    s.left = r.x + 'px'; s.top = r.y + 'px'; s.width = r.w + 'px'; s.height = r.h + 'px';
+    win.el.classList.toggle('maxed', win.max || !!win.snap);
+  }
+  function topWin(except) {
+    let best = null;
+    for (const w of WM.wins) if (w !== except && !w.min && (!best || w.lastFocus > best.lastFocus)) best = w;
+    return best;
+  }
+  function refreshSpine() {
+    for (const id of ORDER) {
+      const b = spineBtns[id]; if (!b) continue;
+      b.classList.toggle('running', WM.wins.some(w => w.appId === id));
+      b.classList.toggle('active', !!WM.focused && WM.focused.appId === id);
+    }
+  }
+  function focus(win) {
+    if (!win || win.closed) return;
+    if (win.min) {
+      win.min = false; win.el.classList.remove('gone');
+      void win.el.offsetWidth; win.el.classList.remove('mini');
+    }
+    if (WM.focused !== win) {
+      if (WM.focused) WM.focused.el.classList.remove('focused');
+      WM.focused = win; win.el.classList.add('focused');
+      win.lastFocus = ++WM.z; win.el.style.zIndex = WM.z;
+      refreshSpine();
+    }
+    if (!win.el.contains(document.activeElement)) {
+      try { (win.focusTarget || win.el).focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+  function minimise(win) {
+    if (win.min || win.closed) return;
+    win.min = true;
+    const b = spineBtns[win.appId] || $('#markBtn'), r = win.el.getBoundingClientRect(), br = b.getBoundingClientRect();
+    win.el.style.setProperty('--mx', (br.left + br.width / 2 - (r.left + r.width / 2)) + 'px');
+    win.el.style.setProperty('--my', (br.top + br.height / 2 - (r.top + r.height / 2)) + 'px');
+    win.el.classList.add('mini'); win.el.classList.remove('focused');
+    win.timeout(() => { if (win.min) win.el.classList.add('gone'); }, 240);
+    if (WM.focused === win) { WM.focused = null; const n = topWin(win); if (n) focus(n); }
+    refreshSpine();
+  }
+  function toggleMax(win) {
+    if (win.max || win.snap) {
+      win.max = false; win.snap = null;
+      if (win.prev) { Object.assign(win, win.prev); win.prev = null; }
+    } else {
+      win.prev = { x: win.x, y: win.y, w: win.w, h: win.h }; win.max = true;
+    }
+    layout(win, true);
+  }
+  function snapWin(win, side) {
+    if (!win.prev) win.prev = { x: win.x, y: win.y, w: win.w, h: win.h };
+    if (side === 'max') { win.max = true; win.snap = null; } else { win.snap = side; win.max = false; }
+    layout(win, true);
+  }
+  function showSnap(side) {
+    if (!side) { snapEl.style.display = 'none'; return; }
+    const r = rectOf({ max: side === 'max', snap: side === 'max' ? null : side }), s = snapEl.style;
+    s.left = (r.x + 6) + 'px'; s.top = (r.y + 6) + 'px'; s.width = (r.w - 12) + 'px'; s.height = (r.h - 12) + 'px';
+    s.display = 'block';
+  }
+  function closeWin(win) {
+    if (win.closed) return;
+    win.closed = true;
+    for (const fn of win.cleanups.splice(0)) { try { fn(); } catch (e) {} }
+    win.timers.forEach(h => clearTimeout(h)); win.timers.clear();
+    win.ro.disconnect();
+    WM.wins.splice(WM.wins.indexOf(win), 1);
+    win.el.classList.add('closing');
+    setTimeout(() => win.el.remove(), 170);
+    if (WM.focused === win) { WM.focused = null; const n = topWin(); if (n) focus(n); }
+    refreshSpine();
+  }
+  function cycle() {
+    if (!WM.wins.length) return;
+    const list = WM.wins.slice().sort((a, b) => a.id - b.id);
+    const i = WM.focused ? list.indexOf(WM.focused) : -1;
+    focus(list[(i + 1) % list.length]);
+  }
+  function ask(win, opts) {
+    return new Promise(res => {
+      const ov = el('div', 'ask'), box = el('form', 'ask-box'), lab = el('label', 'ask-title', opts.title);
+      let input = null;
+      if (!opts.confirm) { input = el('input', 'ask-input'); input.value = opts.value || ''; input.spellcheck = false; input.autocomplete = 'off'; input.setAttribute('aria-label', opts.title); }
+      const row = el('div', 'ask-row'), cancel = tbtn('Cancel'), ok = tbtn(opts.ok || 'OK', 'primary'); ok.type = 'submit';
+      row.append(cancel, ok); box.append(lab); if (input) box.append(input); box.append(row); ov.append(box); win.el.append(ov);
+      const done = v => { ov.remove(); res(v); };
+      box.addEventListener('submit', e => { e.preventDefault(); done(opts.confirm ? true : input.value.trim()); });
+      cancel.addEventListener('click', () => done(null));
+      ov.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') done(null); });
+      ov.addEventListener('pointerdown', e => { if (e.target === ov) done(null); });
+      (input || ok).focus(); if (input) input.select();
+    });
+  }
+
+  function openApp(id, args) {
+    const app = APPS[id]; if (!app) return null;
+    args = args || {};
+    if (app.single) {
+      const ex = WM.wins.find(w => w.appId === id);
+      if (ex) { focus(ex); return ex; }
+    }
+    const a = A(), n = WM.seq++;
+    const w = Math.max(Math.min(app.w, a.w - 12), 200), h = Math.max(Math.min(app.h, a.h - 12), 140);
+    const at = args.at || app.at;
+    const win = {
+      id: n, appId: id, app, title: app.name, w, h, min: false, max: false, snap: null, prev: null,
+      closed: false, cleanups: [], resizers: [], timers: new Set(), lastFocus: 0, focusTarget: null
+    };
+    win.x = Math.round(at ? (a.w - w) * at[0] : clamp((a.w - w) / 2 + ((n % 6) - 2.5) * 34, 6, Math.max(6, a.w - w - 6)));
+    win.y = Math.round(at ? (a.h - h) * at[1] : clamp((a.h - h) / 2 - 16 + ((n % 5) - 2) * 30, 6, Math.max(6, a.h - h - 6)));
+
+    const root = el('section', 'win opening'); root.tabIndex = -1;
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', app.name);
+    const head = el('header', 'win-head'), tab = el('div', 'win-tab'), ico = el('span', 'win-ico'), title = el('span', 'win-title', app.name);
+    ico.innerHTML = glyph(id); tab.append(ico, title);
+    const ctl = el('div', 'win-ctl');
+    const mk = (label, cls) => { const b = el('button', cls); b.type = 'button'; b.title = label; b.setAttribute('aria-label', label); return b; };
+    const bMin = mk('Minimise', 'c-min'), bMax = mk('Maximise or restore', 'c-max'), bClose = mk('Close', 'c-close');
+    ctl.append(bMin, bMax, bClose); head.append(tab, ctl);
+    const body = el('div', 'win-body');
+    root.append(head, body);
+    for (const d of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) { const hd = el('div', 'rz rz-' + d); hd.dataset.dir = d; root.append(hd); }
+    root.addEventListener('animationend', e => { if (e.target === root) root.classList.remove('opening'); });
+
+    win.el = root; win.body = body;
+    win.setTitle = t => { win.title = t; title.textContent = t; root.setAttribute('aria-label', t); };
+    win.onClose = fn => { win.cleanups.push(fn); };
+    win.onResize = fn => { win.resizers.push(fn); };
+    win.raf = fn => { const off = Ticker.add((t, dt) => { if (!win.min) fn(t, dt); }); win.cleanups.push(off); return off; };
+    win.interval = (fn, ms) => { const hnd = setInterval(fn, ms); win.cleanups.push(() => clearInterval(hnd)); return hnd; };
+    win.timeout = (fn, ms) => { const hnd = setTimeout(() => { win.timers.delete(hnd); if (!win.closed) fn(); }, ms); win.timers.add(hnd); return hnd; };
+    win.ask = opts => ask(win, opts);
+    win.close = () => closeWin(win);
+    win.ro = new ResizeObserver(() => { if (!win.closed) win.resizers.forEach(fn => fn()); });
+
+    root.addEventListener('pointerdown', () => focus(win), true);
+    bMin.addEventListener('click', () => minimise(win));
+    bMax.addEventListener('click', () => toggleMax(win));
+    bClose.addEventListener('click', () => closeWin(win));
+    head.addEventListener('dblclick', e => { if (!e.target.closest('button')) toggleMax(win); });
+
+    head.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      const dr = desk.getBoundingClientRect();
+      const origin = win.prev ? Object.assign({}, win.prev) : { x: win.x, y: win.y, w: win.w, h: win.h };
+      let moved = false, snapTo = null, sx = e.clientX, sy = e.clientY, ox = win.x, oy = win.y;
+      try { head.setPointerCapture(e.pointerId); } catch (err) {}
+      const move = ev => {
+        if (!moved) {
+          if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 5) return;
+          moved = true; root.classList.add('dragging');
+          if (win.max || win.snap) {
+            const r = rectOf(win), frac = clamp((ev.clientX - dr.left - r.x) / r.w, 0.1, 0.9);
+            win.max = false; win.snap = null; win.prev = null; win.w = origin.w; win.h = origin.h;
+            ox = ev.clientX - dr.left - win.w * frac; oy = r.y; sx = ev.clientX; sy = ev.clientY;
+          }
+        }
+        const a2 = A();
+        win.x = Math.round(clamp(ox + ev.clientX - sx, 90 - win.w, a2.w - 90));
+        win.y = Math.round(clamp(oy + ev.clientY - sy, 0, a2.h - 40));
+        layout(win);
+        const lx = ev.clientX - dr.left, ly = ev.clientY - dr.top;
+        snapTo = lx < 16 ? 'left' : lx > a2.w - 16 ? 'right' : ly < 5 ? 'max' : null;
+        showSnap(snapTo);
+      };
+      const up = () => {
+        head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); head.removeEventListener('pointercancel', up);
+        root.classList.remove('dragging'); showSnap(null);
+        if (moved && snapTo && !win.closed) { win.prev = origin; snapWin(win, snapTo); }
+      };
+      head.addEventListener('pointermove', move); head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+    });
+
+    root.querySelectorAll('.rz').forEach(hd => hd.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation(); focus(win);
+      if (win.max || win.snap) { Object.assign(win, rectOf(win)); win.max = false; win.snap = null; win.prev = null; layout(win); }
+      const dir = hd.dataset.dir, s0 = { x: win.x, y: win.y, w: win.w, h: win.h, px: e.clientX, py: e.clientY };
+      const minW = app.minW || 260, minH = app.minH || 170;
+      root.classList.add('dragging');
+      try { hd.setPointerCapture(e.pointerId); } catch (err) {}
+      const move = ev => {
+        const dx = ev.clientX - s0.px, dy = ev.clientY - s0.py;
+        let x = s0.x, y = s0.y, w2 = s0.w, h2 = s0.h;
+        if (dir.includes('e')) w2 = Math.max(minW, s0.w + dx);
+        if (dir.includes('s')) h2 = Math.max(minH, s0.h + dy);
+        if (dir.includes('w')) { w2 = Math.max(minW, s0.w - dx); x = s0.x + s0.w - w2; }
+        if (dir.includes('n')) { h2 = Math.max(minH, s0.h - dy); y = s0.y + s0.h - h2; if (y < 0) { h2 = Math.max(minH, h2 + y); y = 0; } }
+        win.x = x; win.y = y; win.w = w2; win.h = h2; layout(win);
+      };
+      const up = () => {
+        hd.removeEventListener('pointermove', move); hd.removeEventListener('pointerup', up); hd.removeEventListener('pointercancel', up);
+        root.classList.remove('dragging');
+      };
+      hd.addEventListener('pointermove', move); hd.addEventListener('pointerup', up); hd.addEventListener('pointercancel', up);
+    }));
+
+    desk.append(root);
+    WM.wins.push(win);
+    layout(win);
+    try { app.launch(win, args); }
+    catch (e) { body.textContent = ''; body.append(el('div', 'pad', 'This app could not start: ' + e.message)); }
+    win.ro.observe(body);
+    focus(win);
+    return win;
+  }
+
+  function openPath(p) {
+    try {
+      if (vfs.isDir(p)) return openApp('files', { path: p });
+      const d = vfs.read(p);
+      return openApp(d.startsWith('data:image/') ? 'paint' : 'notes', { path: p });
+    } catch (e) { return null; }
+  }
+
+  /* ----- Terminal ----- */
+  const shellEnv = {
+    user: 'guest',
+    screen: () => window.innerWidth + ' x ' + window.innerHeight,
+    windows: () => WM.wins.length,
+    uptime: () => Math.round((performance.now() - bootTime) / 1000),
+    apps: () => ORDER.concat('about'),
+    open(arg, path) {
+      const id = arg === 'calculator' ? 'calc' : arg;
+      if (APPS[id]) { const app = APPS[id]; setTimeout(() => openApp(id), 0); return 'Opened ' + app.name; }
+      if (vfs.exists(path)) { setTimeout(() => openPath(path), 0); return 'Opened ' + path; }
+      throw new Error('no app or file called ' + arg);
+    }
+  };
+  APPS.terminal = {
+    name: 'Terminal', w: 640, h: 400, minW: 320, minH: 180,
+    launch(win) {
+      win.body.classList.add('term');
+      const scroll = el('div', 'term-scroll'), out = el('div', 'term-out'), row = el('div', 'term-row');
+      const prompt = el('span', 'term-prompt'), input = el('input', 'term-in');
+      input.spellcheck = false; input.autocomplete = 'off'; input.setAttribute('autocapitalize', 'off'); input.setAttribute('aria-label', 'Terminal input');
+      row.append(prompt, input); scroll.append(out, row); win.body.append(scroll);
+      win.focusTarget = input;
+      const shell = createShell(vfs, shellEnv);
+      let hi = -1, draft = '';
+      const promptText = () => 'guest ' + shell.where() + ' › ';
+      const setPrompt = () => { prompt.textContent = promptText(); };
+      const bottom = () => { scroll.scrollTop = scroll.scrollHeight; };
+      function print(text, cls) {
+        const d = el('div', 'term-line' + (cls && cls !== 'art' ? ' ' + cls : ''));
+        if (cls === 'art') {
+          for (const ln of text.split('\n')) {
+            const r = el('div'); r.append(el('span', 'term-art', ln.slice(0, ART_W)), document.createTextNode(ln.slice(ART_W)));
+            d.append(r);
+          }
+        } else d.textContent = text;
+        out.append(d);
+        while (out.childNodes.length > 400) out.firstChild.remove();
+      }
+      function echoLine(line) {
+        const d = el('div', 'term-line'); d.append(el('span', 'term-p', promptText()), document.createTextNode(line)); out.append(d);
+      }
+      function run(line) {
+        echoLine(line);
+        const r = shell.exec(line);
+        if (r.clear) out.textContent = '';
+        for (const o of r.out) print(o.text, o.cls);
+        setPrompt(); hi = -1; bottom();
+      }
+      input.addEventListener('keydown', e => {
+        const hist = shell.history;
+        if (e.key === 'Enter') { e.preventDefault(); const v = input.value; input.value = ''; run(v); }
+        else if (e.key === 'ArrowUp') {
+          e.preventDefault(); if (!hist.length) return;
+          if (hi === -1) { draft = input.value; hi = hist.length; }
+          hi = Math.max(0, hi - 1); input.value = hist[hi];
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault(); if (hi === -1) return;
+          hi++; if (hi >= hist.length) { hi = -1; input.value = draft; } else input.value = hist[hi];
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+          const r = shell.complete(input.value); input.value = r.line;
+          if (r.options.length) { echoLine(r.line); print(r.options.join('  '), 'dim'); bottom(); }
+        } else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); out.textContent = ''; }
+        else if (e.key === 'c' && e.ctrlKey && input.selectionStart === input.selectionEnd) { e.preventDefault(); echoLine(input.value + '^C'); input.value = ''; bottom(); }
+      });
+      scroll.addEventListener('click', () => { if (String(window.getSelection()) === '') input.focus({ preventScroll: true }); });
+      win.typeRun = (text, alive, done) => {
+        let i = 0; input.value = '';
+        const step = () => {
+          if (!alive()) { input.value = ''; return; }
+          if (i < text.length) { input.value = text.slice(0, ++i); bottom(); win.timeout(step, REDUCED ? 0 : 24 + Math.random() * 38); }
+          else win.timeout(() => { if (!alive()) { input.value = ''; return; } input.value = ''; run(text); if (done) done(); }, REDUCED ? 0 : 240);
+        };
+        step();
+      };
+      print('FableOS terminal. Type help to see what it can do.', 'dim');
+      setPrompt();
+    }
+  };
+
+  /* ----- Files ----- */
+  APPS.files = {
+    name: 'Files', w: 560, h: 380, minW: 320, minH: 220,
+    launch(win, args) {
+      win.body.classList.add('col');
+      let path = args.path && vfs.isDir(args.path) ? args.path : '/home', sel = null;
+      const bar = el('div', 'bar'), up = tbtn('Up'), crumbs = el('div', 'crumbs');
+      const nf = tbtn('New folder'), rn = tbtn('Rename'), del = tbtn('Delete');
+      bar.append(up, crumbs, nf, rn, del);
+      const grid = el('div', 'file-grid'), status = el('div', 'status');
+      win.body.append(bar, grid, status);
+      const say = (t, err) => { status.textContent = t; status.classList.toggle('err', !!err); };
+      const go = p => { path = p; sel = null; render(); };
+      function open(name) {
+        const p = vfs.norm(name, path);
+        if (vfs.isDir(p)) go(p); else openPath(p);
+      }
+      function render() {
+        while (!vfs.isDir(path)) path = vfs.dirname(path);
+        win.setTitle((path === '/' ? '/' : vfs.base(path)) + ' – Files');
+        crumbs.textContent = '';
+        const segs = path.split('/').filter(Boolean); let acc = '';
+        const rootB = el('button', '', '/'); rootB.type = 'button'; rootB.addEventListener('click', () => go('/')); crumbs.append(rootB);
+        segs.forEach((s, i) => {
+          acc += '/' + s; const target = acc;
+          if (i) crumbs.append(el('i', '', '/'));
+          const b = el('button', '', s); b.type = 'button'; b.addEventListener('click', () => go(target)); crumbs.append(b);
+        });
+        up.disabled = path === '/';
+        const items = vfs.list(path);
+        if (sel && !items.some(i => i.name === sel)) sel = null;
+        grid.textContent = '';
+        if (!items.length) grid.append(el('div', 'empty', 'This folder is empty. Use New folder, or save something here.'));
+        for (const it of items) {
+          const b = el('button', 'dicon' + (it.name === sel ? ' sel' : '')); b.type = 'button';
+          b.append(fileIcon(vfs.norm(it.name, path), it.type), el('span', 'dname', it.name));
+          b.addEventListener('click', () => { sel = it.name; grid.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); info(); });
+          b.addEventListener('dblclick', () => open(it.name));
+          b.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); open(it.name); }
+            else if (e.key === 'Delete' || e.key === 'Backspace') { sel = it.name; del.click(); }
+          });
+          grid.append(b);
+        }
+        info();
+      }
+      function info() {
+        rn.disabled = del.disabled = !sel;
+        const items = vfs.list(path);
+        const it = sel && items.find(i => i.name === sel);
+        say(it ? it.name + (it.type === 'dir' ? ', folder with ' + it.size + (it.size === 1 ? ' item' : ' items') : ', ' + fmtSize(it.size))
+          : items.length + (items.length === 1 ? ' item' : ' items'));
+      }
+      const badName = v => !v || v.includes('/') || v === '.' || v === '..';
+      up.addEventListener('click', () => go(vfs.dirname(path)));
+      nf.addEventListener('click', async () => {
+        const v = await win.ask({ title: 'Name the new folder', value: 'New folder', ok: 'Create folder' });
+        if (v == null) return;
+        if (badName(v)) return say('A name cannot be empty or contain a slash.', true);
+        try { vfs.mkdir(vfs.norm(v, path)); sel = v; render(); } catch (e) { say(e.message, true); }
+      });
+      rn.addEventListener('click', async () => {
+        if (!sel) return; const old = sel;
+        const v = await win.ask({ title: 'Rename ' + old, value: old, ok: 'Rename' });
+        if (v == null || v === old) return;
+        if (badName(v)) return say('A name cannot be empty or contain a slash.', true);
+        const target = vfs.norm(v, path);
+        if (vfs.exists(target)) return say('Something called ' + v + ' is already here.', true);
+        try { sel = v; vfs.mv(vfs.norm(old, path), target); } catch (e) { say(e.message, true); }
+      });
+      del.addEventListener('click', async () => {
+        if (!sel) return; const name = sel;
+        const yes = await win.ask({ title: 'Delete ' + name + '? This cannot be undone.', confirm: true, ok: 'Delete' });
+        if (!yes) return;
+        try { vfs.rm(vfs.norm(name, path), true); } catch (e) { say(e.message, true); }
+      });
+      win.onClose(vfs.on(() => render()));
+      render();
+    }
+  };
+
+  /* ----- Notes ----- */
+  APPS.notes = {
+    name: 'Notes', w: 520, h: 400, minW: 300, minH: 200,
+    launch(win, args) {
+      win.body.classList.add('col');
+      let path = null, dirty = false;
+      const bar = el('div', 'bar'), bNew = tbtn('New'), bOpen = tbtn('Open'), bSave = tbtn('Save'), bAs = tbtn('Save as');
+      bar.append(bNew, bOpen, bSave, bAs);
+      const ta = el('textarea', 'note-area'); ta.spellcheck = false; ta.placeholder = 'Start writing. Save keeps it in the file system.'; ta.setAttribute('aria-label', 'Note text');
+      const status = el('div', 'status');
+      win.body.append(bar, ta, status); win.focusTarget = ta;
+      const words = () => { const t = ta.value.trim(); return t ? t.split(/\s+/).length : 0; };
+      function upd(msg, err) {
+        win.setTitle((path ? vfs.base(path) : 'Untitled') + (dirty ? ' •' : '') + ' – Notes');
+        const w = words();
+        status.textContent = msg || ((path || 'Not saved yet') + ', ' + w + (w === 1 ? ' word' : ' words'));
+        status.classList.toggle('err', !!err);
+      }
+      function load(p) {
+        try {
+          const d = vfs.read(p);
+          if (d.startsWith('data:image/')) return upd('That file is a picture. Open it in Paint instead.', true);
+          ta.value = d; path = p; dirty = false; upd();
+        } catch (e) { upd(e.message, true); }
+      }
+      function writeTo(p) {
+        try { vfs.write(p, ta.value); path = p; dirty = false; upd(vfs.saved ? 'Saved to ' + p : 'Saved for this visit only. Browser storage is full.', !vfs.saved); }
+        catch (e) { upd(e.message, true); }
+      }
+      async function saveAs() {
+        const v = await win.ask({ title: 'Save as', value: path || '/home/notes/untitled.txt', ok: 'Save' });
+        if (!v) return;
+        const p = vfs.norm(v, '/home');
+        if (vfs.isDir(p)) return upd(p + ' is a folder. Add a file name.', true);
+        writeTo(p);
+      }
+      const save = () => path ? writeTo(path) : saveAs();
+      bNew.addEventListener('click', () => { ta.value = ''; path = null; dirty = false; upd(); ta.focus(); });
+      bOpen.addEventListener('click', async () => {
+        const v = await win.ask({ title: 'Open which file?', value: path || '/home/readme.txt', ok: 'Open' });
+        if (v) load(vfs.norm(v, '/home'));
+      });
+      bSave.addEventListener('click', save);
+      bAs.addEventListener('click', saveAs);
+      ta.addEventListener('input', () => { dirty = true; upd(); });
+      win.el.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); } });
+      if (args.path) load(args.path); else upd();
+    }
+  };
+
+  /* ----- Paint ----- */
+  APPS.paint = {
+    name: 'Paint', w: 660, h: 500, minW: 380, minH: 300,
+    launch(win, args) {
+      win.body.classList.add('col');
+      const CW = 720, CH = 450, PAPER = '#f6efe2';
+      const COLORS = ['#221f3a', '#f6efe2', '#F2A7C3', '#FF8A5B', '#F4D06F', '#B8E986', '#7FD1C4', '#A6B1FF', '#7a5cff', '#d1495b'];
+      let tool = 'brush', color = COLORS[0], size = 6, path = null, drawing = false, last = null;
+      const undo = [];
+      const bar = el('div', 'bar'), bar2 = el('div', 'bar');
+      const tools = {};
+      for (const [id, label] of [['brush', 'Brush'], ['eraser', 'Eraser'], ['fill', 'Fill']]) {
+        const b = tbtn(label); tools[id] = b; b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', () => { tool = id; sync(); }); bar.append(b);
+      }
+      const sizes = [];
+      for (const s of [3, 6, 14, 28]) {
+        const b = tbtn(''); b.title = 'Brush size ' + s; b.setAttribute('aria-label', 'Brush size ' + s);
+        const dot = el('span', 'size-dot'); const d = Math.min(16, 3 + s / 2); dot.style.width = dot.style.height = d + 'px'; b.append(dot);
+        b.style.width = '34px'; b.style.height = '27px'; b.style.padding = '0';
+        b.addEventListener('click', () => { size = s; sync(); }); sizes.push([s, b]); bar.append(b);
+      }
+      const gap = el('span', 'gap'), bUndo = tbtn('Undo'), bClear = tbtn('Clear'), bOpen = tbtn('Open'), bSave = tbtn('Save');
+      bar.append(gap, bUndo, bClear, bOpen, bSave);
+      const swatches = [];
+      for (const c of COLORS) {
+        const b = el('button', 'swatch'); b.type = 'button'; b.style.background = c; b.title = c; b.setAttribute('aria-label', 'Colour ' + c);
+        b.addEventListener('click', () => { color = c; if (tool === 'eraser') tool = 'brush'; sync(); });
+        swatches.push([c, b]); bar2.append(b);
+      }
+      const pick = el('input', 'pick'); pick.type = 'color'; pick.value = '#7a5cff'; pick.title = 'Pick any colour'; pick.setAttribute('aria-label', 'Pick any colour');
+      pick.addEventListener('input', () => { color = pick.value; if (tool === 'eraser') tool = 'brush'; sync(); });
+      bar2.append(pick);
+      const stage = el('div', 'stage paint-stage'), cv = el('canvas', 'paint-cv'), status = el('div', 'status');
+      cv.width = CW; cv.height = CH; stage.append(cv);
+      win.body.append(bar, bar2, stage, status);
+      const c = cv.getContext('2d', { willReadFrequently: true });
+      c.fillStyle = PAPER; c.fillRect(0, 0, CW, CH);
+      const say = (t, err) => { status.textContent = t; status.classList.toggle('err', !!err); };
+      function sync() {
+        for (const id in tools) { tools[id].classList.toggle('on', id === tool); tools[id].setAttribute('aria-pressed', String(id === tool)); }
+        for (const [s, b] of sizes) b.classList.toggle('on', s === size);
+        for (const [col, b] of swatches) b.classList.toggle('on', col === color);
+        bUndo.disabled = !undo.length;
+        win.setTitle((path ? vfs.base(path) : 'Untitled') + ' – Paint');
+      }
+      function fit() {
+        const r = stage.getBoundingClientRect(); if (r.width < 10 || r.height < 10) return;
+        const k = Math.min((r.width - 28) / CW, (r.height - 28) / CH);
+        const w = Math.max(40, CW * k), h = Math.max(25, CH * k);
+        cv.style.width = w + 'px'; cv.style.height = h + 'px';
+        cv.style.left = Math.round((r.width - w) / 2 - 2) + 'px'; cv.style.top = Math.round((r.height - h) / 2 - 2) + 'px';
+      }
+      win.onResize(fit);
+      const snap = () => { undo.push(c.getImageData(0, 0, CW, CH)); if (undo.length > 20) undo.shift(); bUndo.disabled = false; };
+      const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - cv.clientLeft) * CW / cv.clientWidth, y: (e.clientY - r.top - cv.clientTop) * CH / cv.clientHeight }; };
+      const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+      function flood(x0, y0, hex) {
+        x0 = Math.floor(x0); y0 = Math.floor(y0);
+        if (x0 < 0 || y0 < 0 || x0 >= CW || y0 >= CH) return;
+        const img = c.getImageData(0, 0, CW, CH), d = img.data, rgb = hexRgb(hex), r = rgb[0], g = rgb[1], b = rgb[2];
+        const i0 = (y0 * CW + x0) * 4, tr = d[i0], tg = d[i0 + 1], tb = d[i0 + 2];
+        if (Math.abs(tr - r) + Math.abs(tg - g) + Math.abs(tb - b) < 6) return;
+        const match = i => Math.abs(d[i] - tr) + Math.abs(d[i + 1] - tg) + Math.abs(d[i + 2] - tb) <= 70;
+        const seen = new Uint8Array(CW * CH), stack = [x0, y0];
+        while (stack.length) {
+          const y = stack.pop(), x = stack.pop();
+          if (seen[y * CW + x] || !match((y * CW + x) * 4)) continue;
+          let xl = x, xr = x;
+          while (xl > 0 && !seen[y * CW + xl - 1] && match((y * CW + xl - 1) * 4)) xl--;
+          while (xr < CW - 1 && !seen[y * CW + xr + 1] && match((y * CW + xr + 1) * 4)) xr++;
+          for (let xi = xl; xi <= xr; xi++) { const p = y * CW + xi, i = p * 4; seen[p] = 1; d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255; }
+          for (const ny of [y - 1, y + 1]) {
+            if (ny < 0 || ny >= CH) continue;
+            let inSpan = false;
+            for (let xi = xl; xi <= xr; xi++) {
+              const p = ny * CW + xi, ok = !seen[p] && match(p * 4);
+              if (ok && !inSpan) { stack.push(xi, ny); inSpan = true; } else if (!ok) inSpan = false;
+            }
+          }
+        }
+        c.putImageData(img, 0, 0);
+      }
+      function seg(a, b) {
+        c.strokeStyle = tool === 'eraser' ? PAPER : color; c.lineWidth = size; c.lineCap = 'round'; c.lineJoin = 'round';
+        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x + 0.01, b.y + 0.01); c.stroke();
+      }
+      cv.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        e.preventDefault(); snap();
+        const p = pos(e);
+        if (tool === 'fill') { flood(p.x, p.y, color); return; }
+        drawing = true; last = p; seg(p, p);
+        try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      cv.addEventListener('pointermove', e => {
+        if (!drawing) return;
+        const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+        for (const ev of (evs.length ? evs : [e])) { const p = pos(ev); seg(last, p); last = p; }
+      });
+      const stop = () => { drawing = false; };
+      cv.addEventListener('pointerup', stop); cv.addEventListener('pointercancel', stop);
+      function doUndo() { const im = undo.pop(); if (im) c.putImageData(im, 0, 0); bUndo.disabled = !undo.length; }
+      bUndo.addEventListener('click', doUndo);
+      bClear.addEventListener('click', () => { snap(); c.fillStyle = PAPER; c.fillRect(0, 0, CW, CH); });
+      function load(p) {
+        let d;
+        try { d = vfs.read(p); } catch (e) { return say(e.message, true); }
+        if (!d.startsWith('data:image/')) return say(p + ' is not a picture.', true);
+        const im = new Image();
+        im.onload = () => { if (win.closed) return; snap(); c.fillStyle = PAPER; c.fillRect(0, 0, CW, CH); c.drawImage(im, 0, 0, CW, CH); path = p; sync(); say('Opened ' + p); };
+        im.onerror = () => say('That picture could not be read.', true);
+        im.src = d;
+      }
+      bOpen.addEventListener('click', async () => {
+        const v = await win.ask({ title: 'Open which picture?', value: path || '/home/pictures/dunes.png', ok: 'Open' });
+        if (v) load(vfs.norm(v, '/home/pictures'));
+      });
+      bSave.addEventListener('click', async () => {
+        const v = await win.ask({ title: 'Save picture as', value: path || '/home/pictures/drawing.png', ok: 'Save' });
+        if (!v) return;
+        let p = vfs.norm(v, '/home/pictures');
+        if (vfs.isDir(p)) return say(p + ' is a folder. Add a file name.', true);
+        if (!/\.png$/i.test(p)) p += '.png';
+        try {
+          vfs.write(p, cv.toDataURL('image/png')); path = p; sync();
+          say(vfs.saved ? 'Saved to ' + p : 'Saved for this visit only. Browser storage is full.', !vfs.saved);
+        } catch (e) { say(e.message, true); }
+      });
+      win.el.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); } });
+      sync(); say('Pick a tool and draw. Save puts the picture in the file system.');
+      if (args.path) load(args.path);
+    }
+  };
+
+  /* ----- Calculator ----- */
+  APPS.calc = {
+    name: 'Calculator', w: 300, h: 430, minW: 250, minH: 360, single: true,
+    launch(win) {
+      win.body.classList.add('col', 'calc');
+      let expr = '', justDone = false;
+      const screen = el('div', 'calc-screen'), hist = el('div', 'calc-hist'), ex = el('div', 'calc-expr', '0'), live = el('div', 'calc-live');
+      screen.append(hist, ex, live);
+      const keys = el('div', 'calc-keys');
+      win.body.append(screen, keys);
+      function show(err) {
+        ex.textContent = expr || '0';
+        live.classList.toggle('err', !!err);
+        if (err) { live.textContent = err; return; }
+        try { live.textContent = expr && /[^\d.]/.test(expr) ? '= ' + calcFormat(calcEval(expr)) : ''; } catch (e) { live.textContent = ''; }
+      }
+      function press(k) {
+        if (k === 'C') { expr = ''; justDone = false; return show(); }
+        if (k === '⌫') { expr = /sqrt\($/.test(expr) ? expr.slice(0, -5) : expr.slice(0, -1); justDone = false; return show(); }
+        if (k === '=') {
+          if (!expr) return;
+          try { const v = calcFormat(calcEval(expr)); hist.textContent = expr + ' = ' + v; expr = v; justDone = true; show(); }
+          catch (e) { show(e.message.charAt(0).toUpperCase() + e.message.slice(1)); }
+          return;
+        }
+        const startsValue = /^[\d.(π√]/.test(k);
+        if (justDone && startsValue) expr = '';
+        justDone = false;
+        if (expr.length < 60) expr += k === '√' ? 'sqrt(' : k;
+        show();
+      }
+      const layoutKeys = ['C', '(', ')', '⌫', '7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '−', '0', '.', '^', '+', '√', 'π', '%', '='];
+      const names = { 'C': 'Clear', '⌫': 'Delete last', '÷': 'Divide', '×': 'Multiply', '−': 'Minus', '+': 'Plus', '^': 'Power', '√': 'Square root', 'π': 'Pi', '%': 'Remainder', '=': 'Equals' };
+      for (const k of layoutKeys) {
+        const b = tbtn(k, k === '=' ? 'primary' : /[\d.]/.test(k) ? '' : 'op');
+        if (names[k]) b.setAttribute('aria-label', names[k]);
+        b.addEventListener('click', () => press(k)); keys.append(b);
+      }
+      win.el.addEventListener('keydown', e => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const map = { '*': '×', '/': '÷', '-': '−', 'Enter': '=', 'Backspace': '⌫', 'Escape': 'C', 'Delete': 'C', 'p': 'π' };
+        const k = map[e.key] || e.key;
+        if (layoutKeys.includes(k)) {
+          if (e.key === 'Enter' && e.target.tagName === 'BUTTON' && e.target.closest('.win-ctl')) return;
+          e.preventDefault(); press(k);
+        }
+      });
+      show();
+    }
+  };
+
+  /* ----- Orbit chimes (the toy) ----- */
+  APPS.chimes = {
+    name: 'Orbit chimes', w: 380, h: 440, minW: 280, minH: 300, single: true, at: [0.72, 0.9],
+    launch(win) {
+      win.body.classList.add('col');
+      const RINGS = 5, NOTES = [587.33, 440, 392, 293.66, 220];
+      const bar = el('div', 'bar');
+      const snd = el('label', 'check'), cb = el('input'); cb.type = 'checkbox'; snd.append(cb, document.createTextNode('Sound'));
+      const sp = el('label', 'check'), range = el('input'); range.type = 'range'; range.min = '0.3'; range.max = '2.5'; range.step = '0.1'; range.value = '1';
+      sp.append(document.createTextNode('Speed'), range);
+      const scatter = tbtn('Scatter'), clear = tbtn('Clear');
+      bar.append(snd, sp, el('span', 'gap'), scatter, clear);
+      const stage = el('div', 'stage'), cv = el('canvas', 'fill'), status = el('div', 'status', 'Click a ring to plant a chime. Click a chime to remove it.');
+      stage.append(cv); win.body.append(bar, stage, status);
+      const c = cv.getContext('2d');
+      let w = 0, h = 0, dpr = 1, angle = -Math.PI / 2, ac = null, master = null, chimes = [];
+      win.onResize(() => {
+        const r = stage.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1);
+        w = Math.max(40, r.width); h = Math.max(40, r.height);
+        cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      });
+      const radius = () => Math.max(20, Math.min(w, h) / 2 - 18);
+      function pattern(random) {
+        chimes = [];
+        const n = random ? 7 + Math.floor(Math.random() * 7) : 11;
+        for (let i = 0; i < n; i++) chimes.push({
+          ring: random ? Math.floor(Math.random() * RINGS) : (i * 3) % RINGS,
+          a: random ? Math.round(Math.random() * 16) / 16 * TAU : (i / 11) * TAU + ((i * 7) % 3) * 0.2, hit: -1e9
+        });
+      }
+      function audioOn() {
+        if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+        const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+        ac = new AC(); master = ac.createGain(); master.gain.value = 0.6;
+        const d = ac.createDelay(1), fb = ac.createGain(); d.delayTime.value = 0.31; fb.gain.value = 0.32;
+        master.connect(ac.destination); master.connect(d); d.connect(fb); fb.connect(d); fb.connect(ac.destination);
+      }
+      function ring(ch, t) {
+        ch.hit = t;
+        if (!cb.checked || !ac) return;
+        const now = ac.currentTime, o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), g2 = ac.createGain();
+        o.type = 'sine'; o2.type = 'triangle'; o.frequency.value = NOTES[ch.ring]; o2.frequency.value = NOTES[ch.ring] * 2.01; g2.gain.value = 0.25;
+        g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.22, now + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, now + 1.6);
+        o.connect(g); o2.connect(g2); g2.connect(g); g.connect(master);
+        o.start(now); o2.start(now); o.stop(now + 1.7); o2.stop(now + 1.7);
+      }
+      cb.addEventListener('change', () => { if (cb.checked) audioOn(); });
+      scatter.addEventListener('click', () => pattern(true));
+      clear.addEventListener('click', () => { chimes = []; });
+      cv.addEventListener('pointerdown', e => {
+        const r = cv.getBoundingClientRect(), x = e.clientX - r.left - w / 2, y = e.clientY - r.top - h / 2, R = radius();
+        const idx = Math.round(Math.hypot(x, y) / R * RINGS) - 1;
+        if (idx < 0 || idx >= RINGS) return;
+        const a = (Math.atan2(y, x) + TAU) % TAU, rr = R * (idx + 1) / RINGS;
+        const hit = chimes.findIndex(ch => { if (ch.ring !== idx) return false; let d = Math.abs(ch.a - a) % TAU; if (d > Math.PI) d = TAU - d; return d * rr < 13; });
+        if (hit >= 0) { chimes.splice(hit, 1); return; }
+        const ch = { ring: idx, a, hit: -1e9 }; chimes.push(ch);
+        cb.checked = true; audioOn(); ring(ch, performance.now());
+      });
+      win.raf((t, dt) => {
+        if (!w) return;
+        const stepA = REDUCED ? 0 : dt * 0.0012 * parseFloat(range.value), prev = angle; angle += stepA;
+        const R = radius(), cols = [pal.accent, pal.teal, pal.gold, pal.accent, pal.teal];
+        c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+        c.save(); c.translate(w / 2, h / 2);
+        c.lineWidth = 1.5; c.strokeStyle = pal.ink;
+        for (let i = 0; i < RINGS; i++) { c.globalAlpha = 0.22; c.beginPath(); c.arc(0, 0, R * (i + 1) / RINGS, 0, TAU); c.stroke(); }
+        c.globalAlpha = 1; c.strokeStyle = pal.accent; c.lineWidth = 2.5; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(angle) * R, Math.sin(angle) * R); c.stroke();
+        for (const ch of chimes) {
+          const da = (((ch.a - prev) % TAU) + TAU) % TAU;
+          if (stepA > 0 && da < stepA) ring(ch, t);
+          const rr = R * (ch.ring + 1) / RINGS, x = Math.cos(ch.a) * rr, y = Math.sin(ch.a) * rr, age = (t - ch.hit) / 700;
+          c.fillStyle = cols[ch.ring]; c.strokeStyle = cols[ch.ring];
+          if (age >= 0 && age < 1) { c.globalAlpha = 1 - age; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 6 + age * 22, 0, TAU); c.stroke(); c.globalAlpha = 1; }
+          c.beginPath(); c.arc(x, y, age >= 0 && age < 1 ? 7.5 - age * 2 : 5.5, 0, TAU); c.fill();
+        }
+        c.fillStyle = pal.ink; c.beginPath(); c.arc(0, 0, 4, 0, TAU); c.fill();
+        c.restore();
+        if (angle > TAU) angle -= TAU;
+      });
+      win.onClose(() => { if (ac) { const x = ac; ac = null; x.close().catch(() => {}); } });
+      pattern(false);
+    }
+  };
+
+  /* ----- System monitor ----- */
+  APPS.monitor = {
+    name: 'System monitor', w: 360, h: 430, minW: 280, minH: 300, single: true,
+    launch(win) {
+      win.body.classList.add('col');
+      const top = el('div', 'mon-top'), big = el('b', '', '60'), cap = el('span', '', 'frames per second');
+      top.append(big, cap);
+      const gbox = el('div', 'stage mon-graph'), cv = el('canvas', 'fill'); gbox.append(cv);
+      const list = el('div', 'mon-list');
+      const sWin = el('section'), hWin = el('h3', '', 'Open windows'), ul = el('ul'); sWin.append(hWin, ul);
+      const sSto = el('section'), hSto = el('h3', '', 'Storage'), meter = el('div', 'meter'), mi = el('i'), stoText = el('div', 'small');
+      meter.append(mi); sSto.append(hSto, meter, stoText);
+      const up = el('div', 'small');
+      list.append(sWin, sSto, up); win.body.append(top, gbox, list);
+      const c = cv.getContext('2d'); let w = 0, h = 0, dpr = 1;
+      win.onResize(() => {
+        const r = gbox.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1);
+        w = Math.max(20, gbox.clientWidth || r.width); h = Math.max(20, gbox.clientHeight || r.height);
+        cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      });
+      win.raf(() => {
+        if (!w) return;
+        const f = Ticker.frames, start = Ticker.index;
+        let peak = 0; for (let i = 0; i < 120; i++) if (f[i] > 0) peak = Math.max(peak, 1000 / f[i]);
+        const top2 = peak > 80 ? 130 : 70;
+        c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+        c.strokeStyle = pal.dim; c.globalAlpha = 0.35; c.lineWidth = 1; c.setLineDash([4, 4]);
+        for (const v of [30, 60]) { const y = h - v / top2 * h; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+        c.setLineDash([]); c.globalAlpha = 1;
+        c.beginPath(); let first = true;
+        for (let i = 0; i < 120; i++) {
+          const dt = f[(start + i) % 120]; if (!(dt > 0)) continue;
+          const x = i / 119 * w, y = h - Math.min(top2, 1000 / dt) / top2 * (h - 6) - 3;
+          if (first) { c.moveTo(x, y); first = false; } else c.lineTo(x, y);
+        }
+        c.strokeStyle = pal.accent; c.lineWidth = 2; c.lineJoin = 'round'; c.stroke();
+      });
+      function refresh() {
+        big.textContent = String(Math.round(Ticker.fps));
+        ul.textContent = '';
+        for (const x of WM.wins.slice().sort((a, b) => a.id - b.id)) {
+          const li = el('li'); li.append(document.createTextNode(x.title), el('span', '', x.min ? 'minimised' : x === WM.focused ? 'in front' : 'open')); ul.append(li);
+        }
+        const used = vfs.size(), cnt = vfs.count(), quota = 5 * 1048576;
+        mi.style.width = Math.min(100, used / quota * 100).toFixed(2) + '%';
+        stoText.textContent = fmtSize(used) + ' of about 5 MB, ' + cnt.files + ' files in ' + cnt.dirs + ' folders' + (vfs.saved ? '' : '. Storage is full, so new changes last only for this visit.');
+        const s = Math.round((performance.now() - bootTime) / 1000);
+        up.textContent = 'Running for ' + (s >= 60 ? Math.floor(s / 60) + ' min ' : '') + (s % 60) + ' s';
+      }
+      win.interval(refresh, 500); refresh();
+    }
+  };
+
+  /* ----- Settings ----- */
+  APPS.settings = {
+    name: 'Settings', w: 420, h: 430, minW: 300, minH: 280, single: true,
+    launch(win) {
+      const pad = el('div', 'pad'); pad.style.height = '100%'; win.body.append(pad);
+      const status = el('div', 'small');
+      pad.append(el('h3', '', 'Wallpaper'));
+      const rowW = el('div', 'set-row'), thumbs = [];
+      for (const id of Object.keys(WALLS)) {
+        const b = el('button', 'wall-opt'); b.type = 'button'; const cv = el('canvas'); cv.width = 224; cv.height = 132;
+        b.append(cv, el('span', '', WALL_NAMES[id]));
+        b.addEventListener('click', () => { settings.wall = id; applySettings(true); });
+        thumbs.push([id, b, cv]); rowW.append(b);
+      }
+      pad.append(rowW, el('h3', '', 'Accent colour'));
+      const rowA = el('div', 'set-row'), sw = [];
+      for (const [hex, name] of ACCENTS) {
+        const b = el('button', 'swatch'); b.type = 'button'; b.style.background = hex; b.title = name; b.setAttribute('aria-label', name);
+        b.addEventListener('click', () => { settings.accent = hex; applySettings(true); });
+        sw.push([hex, b]); rowA.append(b);
+      }
+      pad.append(rowA, el('h3', '', 'Appearance'));
+      const rowT = el('div', 'set-row'), bDark = tbtn('Dark'), bLight = tbtn('Light');
+      bDark.addEventListener('click', () => { settings.theme = 'dark'; applySettings(true); });
+      bLight.addEventListener('click', () => { settings.theme = 'light'; applySettings(true); });
+      rowT.append(bDark, bLight);
+      pad.append(rowT, el('h3', '', 'Files'));
+      const rowF = el('div', 'set-row'), bReset = tbtn('Reset files');
+      rowF.append(bReset, status); pad.append(rowF);
+      bReset.addEventListener('click', async () => {
+        const yes = await win.ask({ title: 'Reset files? Everything you saved will be replaced by the starter files.', confirm: true, ok: 'Reset files' });
+        if (yes) { vfs.reset(); seedPictures(); status.textContent = 'Files reset.'; }
+      });
+      function sync() {
+        for (const [id, b, cv] of thumbs) {
+          b.classList.toggle('on', id === settings.wall); b.setAttribute('aria-pressed', String(id === settings.wall));
+          const c = cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); WALLS[id](c, 224, 132, 4000, pal);
+        }
+        for (const [hex, b] of sw) b.classList.toggle('on', hex === settings.accent);
+        bDark.classList.toggle('on', settings.theme === 'dark'); bLight.classList.toggle('on', settings.theme === 'light');
+      }
+      settingsListeners.add(sync); win.onClose(() => settingsListeners.delete(sync));
+      sync();
+    }
+  };
+
+  /* ----- About ----- */
+  APPS.about = {
+    name: 'About FableOS', w: 400, h: 400, minW: 280, minH: 240, single: true,
+    launch(win) {
+      const box = el('div', 'pad about'); box.style.height = '100%';
+      box.append(el('h2', '', 'FableOS'), el('p', '', 'A small desktop that lives in one HTML file. Windows, files, a terminal and eight apps, with nothing downloaded and nothing installed.'));
+      const dl = el('dl');
+      for (const [k, v] of [['Alt + `', 'Next window'], ['Double-click a title bar', 'Maximise or restore'], ['Drag to a side edge', 'Snap to half the screen'], ['Drag to the top edge', 'Maximise'], ['Shift-click a launcher icon', 'Open another window']]) dl.append(el('dt', '', k), el('dd', '', v));
+      box.append(dl);
+      const a = el('a', '', '← Showcase'); a.href = '../index.html';
+      const p = el('p'); p.append(a); box.append(p);
+      win.body.append(box);
+    }
+  };
+
+  /* Launcher, menu, clock, desktop icons */
+  const appsBox = $('#apps'), tip = $('#tip');
+  for (const id of ORDER) {
+    const b = el('button', 'app-btn'); b.type = 'button'; b.innerHTML = glyph(id); b.setAttribute('aria-label', APPS[id].name);
+    b.addEventListener('click', e => {
+      const mine = WM.wins.filter(w => w.appId === id);
+      if (!mine.length || (e.shiftKey && !APPS[id].single)) { openApp(id); return; }
+      const top = mine.sort((a, c) => c.lastFocus - a.lastFocus)[0];
+      if (WM.focused === top && !top.min) minimise(top); else focus(top);
+    });
+    const showTip = () => { const r = b.getBoundingClientRect(); tip.textContent = APPS[id].name; tip.style.top = (r.top + r.height / 2 - 14) + 'px'; tip.style.display = 'block'; };
+    const hideTip = () => { tip.style.display = 'none'; };
+    b.addEventListener('pointerenter', showTip); b.addEventListener('pointerleave', hideTip);
+    b.addEventListener('focus', showTip); b.addEventListener('blur', hideTip);
+    spineBtns[id] = b; appsBox.append(b);
+  }
+  const menu = $('#menu'), markBtn = $('#markBtn');
+  const setMenu = open => { menu.classList.toggle('open', open); markBtn.setAttribute('aria-expanded', String(open)); };
+  markBtn.addEventListener('click', () => setMenu(!menu.classList.contains('open')));
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    setMenu(false);
+    if (b.dataset.act === 'about') openApp('about');
+    else if (b.dataset.act === 'cycle') cycle();
+    else if (b.dataset.act === 'restart') location.reload();
+  });
+  document.addEventListener('pointerdown', e => { if (!menu.contains(e.target) && e.target !== markBtn) setMenu(false); });
+
+  const clockT = $('#clockT'), clockD = $('#clockD');
+  function tick() {
+    const d = new Date();
+    clockT.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    clockD.textContent = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
+  }
+  setInterval(tick, 1000); tick();
+
+  const iconsBox = $('#icons');
+  let knownIcons = null, iconSel = null;
+  function renderIcons() {
+    let items = []; try { items = vfs.list(DESKTOP); } catch (e) {}
+    iconsBox.textContent = '';
+    for (const it of items) {
+      const p = vfs.norm(it.name, DESKTOP);
+      const b = el('button', 'dicon' + (iconSel === it.name ? ' sel' : '') + (knownIcons && !knownIcons.has(it.name) ? ' pop' : '')); b.type = 'button';
+      b.append(fileIcon(p, it.type), el('span', 'dname', it.name));
+      b.addEventListener('click', () => { iconSel = it.name; iconsBox.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
+      b.addEventListener('dblclick', () => openPath(p));
+      b.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); openPath(p); } });
+      iconsBox.append(b);
+    }
+    knownIcons = new Set(items.map(i => i.name));
+  }
+  desk.addEventListener('pointerdown', e => {
+    if (e.target === desk || e.target === iconsBox) { iconSel = null; iconsBox.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Backquote' && (e.altKey || e.ctrlKey)) { e.preventDefault(); cycle(); }
+    else if (e.key === 'Escape') setMenu(false);
+  }, true);
+  window.addEventListener('resize', () => {
+    sizeWall();
+    const a = A();
+    for (const w of WM.wins) {
+      w.x = Math.round(clamp(w.x, 90 - w.w, Math.max(0, a.w - 90))); w.y = Math.round(clamp(w.y, 0, Math.max(0, a.h - 40)));
+      layout(w);
+    }
+  });
+
+  /* Attract mode: runs until the first real input */
+  const Attract = {
+    on: true, timers: new Set(),
+    later(fn, ms) { const h = setTimeout(() => { this.timers.delete(h); if (this.on) fn(); }, ms); this.timers.add(h); },
+    stop() { if (!this.on) return; this.on = false; this.timers.forEach(clearTimeout); this.timers.clear(); INPUTS.forEach(t => window.removeEventListener(t, stopAttract, true)); }
+  };
+  const INPUTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+  function stopAttract(e) { if (e && e.isTrusted === false) return; Attract.stop(); }
+  INPUTS.forEach(t => window.addEventListener(t, stopAttract, { capture: true, passive: true }));
+  function runAttract() {
+    if (!Attract.on) return;
+    const alive = () => Attract.on;
+    const term = openApp('terminal', { at: [0.2, 0.16] });
+    /* keep the desktop icon column visible so the new file can be seen arriving */
+    term.x = Math.round(clamp(Math.max(term.x, 126), 6, Math.max(6, A().w - term.w - 6))); layout(term);
+    const say = (text, pause, next) => Attract.later(() => {
+      if (term.closed) return;
+      focus(term); term.typeRun(text, alive, next);
+    }, pause);
+    say('sysinfo', 450, () =>
+      say('ls desktop', 900, () =>
+        say('echo "made in the terminal" > desktop/hello.txt', 700, () =>
+          Attract.later(() => {
+            openApp('files', { path: DESKTOP, at: [0.94, 0.1] });
+            say('cat notes/haiku.txt', 900, () =>
+              say('open chimes', 1100, () =>
+                say('echo "your turn. click anything"', 1500, null)));
+          }, 700))));
+  }
+
+  /* Boot */
+  applySettings(false);
+  sizeWall();
+  const fresh = !vfs.load();
+  if (fresh) seedPictures();
+  vfs.on(renderIcons);
+  renderIcons();
+  refreshSpine();
+  const boot = $('#boot'), bootLine = $('#bootLine');
+  const steps = ['Unpacking the file system', 'Hanging the wallpaper', 'Waking the windows', 'Ready'];
+  const quick = REDUCED ? 0.3 : 1;
+  steps.forEach((s, i) => setTimeout(() => { bootLine.textContent = s; }, (220 + i * 250) * quick));
+  setTimeout(() => boot.classList.add('done'), 1150 * quick);
+  setTimeout(() => { boot.remove(); runAttract(); }, 1500 * quick);
+})();
+</script>
+</body>
+</html>

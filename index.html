@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fable 5.2 showcase</title>
+<style>
+  :root {
+    --ink: #0C0E1C;
+    --ink-raised: #151936;
+    --bone: #EDE6D6;
+    --dim: #9496AE;
+    --line: rgba(237, 230, 214, .14);
+    --accent: #FFB454;
+    --display: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", "Avenir Next", system-ui, sans-serif;
+    --text: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  @property --accent { syntax: "<color>"; inherits: true; initial-value: #FFB454; }
+  * { box-sizing: border-box; }
+  html { background: var(--ink); transition: --accent .6s; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--bone); font-family: var(--text);
+    font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(60vw 60vh at 78% 42%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+      var(--ink);
+    transition: --accent .6s;
+  }
+
+  .wrap {
+    min-height: 100vh; display: grid; align-items: center;
+    grid-template-columns: minmax(280px, .78fr) minmax(0, 1.7fr);
+    gap: clamp(24px, 4.5vw, 72px);
+    padding: clamp(20px, 3.4vw, 52px) clamp(20px, 4vw, 64px);
+  }
+
+  /* ---- left: intro and the list ---- */
+  .intro h1 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; max-width: 30ch; }
+  .intro p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: var(--dim); max-width: 38ch; }
+
+  .reel { list-style: none; margin: clamp(18px, 4vh, 40px) 0 0; padding: 0; }
+  .reel li { position: relative; }
+  .reel button {
+    all: unset; cursor: pointer; display: flex; align-items: baseline; gap: 14px; width: 100%;
+    font-family: var(--display); font-weight: 700; letter-spacing: -.005em;
+    font-size: clamp(30px, 6.6vh, 66px); line-height: 1.06;
+    color: var(--bone); opacity: .3; transition: opacity .25s, color .25s, transform .35s cubic-bezier(.2,.8,.2,1);
+  }
+  .reel button:hover { opacity: .7; }
+  .reel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+  .reel button[aria-current="true"] { opacity: 1; color: var(--accent); transform: translateX(10px); }
+  .reel .key {
+    font-family: var(--text); font-size: 12px; font-weight: 500; width: 14px; text-align: right;
+    color: var(--dim); letter-spacing: 0; transform: translateY(-.35em);
+  }
+  .reel button[aria-current="true"] .key { color: var(--accent); }
+  .reel .timer {
+    position: absolute; left: 38px; right: 0; bottom: 0; height: 2px; max-width: 320px;
+    background: var(--line); opacity: 0; overflow: hidden; border-radius: 2px;
+  }
+  .reel li.on .timer { opacity: 1; }
+  .reel .timer i { display: block; height: 100%; width: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+
+  .keys { margin: clamp(16px, 3.4vh, 32px) 0 0; font-size: 13px; color: var(--dim); line-height: 1.5; max-width: 40ch; }
+  .keys kbd {
+    font: inherit; color: var(--bone); padding: 1px 6px; border-radius: 5px;
+    border: 1px solid var(--line); background: rgba(255,255,255,.04);
+  }
+
+  /* ---- right: the stage ---- */
+  .stage {
+    position: relative; aspect-ratio: 16 / 10; width: 100%; max-height: 66vh; margin-inline: auto;
+    border-radius: 14px; overflow: hidden; background: #05060d;
+    border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+    box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 6px rgba(255,255,255,.02);
+    transition: border-color .6s, box-shadow .6s;
+  }
+  .stage iframe {
+    position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0;
+    transform-origin: 0 0; pointer-events: none; opacity: 0; transition: opacity .5s;
+    background: #05060d;
+  }
+  .stage iframe.ready { opacity: 1; }
+  .stage a.open-cover { position: absolute; inset: 0; z-index: 2; }
+  .stage a.open-cover:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 14px; }
+  .live {
+    position: absolute; z-index: 3; left: 14px; bottom: 14px; font-size: 12px; padding: 5px 11px 5px 9px;
+    border-radius: 999px; background: rgba(12,14,28,.66); border: 1px solid var(--line);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: center; gap: 7px; pointer-events: none;
+  }
+  .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  .about { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 32px; align-items: start; margin-top: clamp(16px, 2.6vh, 26px); }
+  .about p { margin: 0; font-size: clamp(16px, 1.25vw, 19px); line-height: 1.5; max-width: 56ch; min-height: 3em; }
+  .facts { grid-column: 1; margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 13px; color: var(--dim); }
+  .open {
+    grid-column: 2; grid-row: 1 / span 2; align-self: center; white-space: nowrap;
+    font: 600 15px var(--text); color: #0b0d18; background: var(--accent); text-decoration: none;
+    padding: 13px 22px; border-radius: 999px; transition: background .6s, transform .15s;
+  }
+  .open:hover { transform: translateY(-1px); }
+  .open:focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
+
+  /* one entrance, on load */
+  @media (prefers-reduced-motion: no-preference) {
+    .reel li { animation: rise .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i) * 55ms + 120ms); }
+    .right { animation: rise .9s cubic-bezier(.2,.8,.2,1) .25s both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live::before { animation: none; }
+    .reel button, .stage iframe { transition: none; }
+  }
+
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; align-items: start; }
+    .right { order: -1; }
+    .stage { max-height: none; }
+    .about { grid-template-columns: 1fr; }
+    .open { grid-column: 1; grid-row: auto; justify-self: start; }
+    .reel button { font-size: clamp(30px, 9vw, 48px); }
+    .keys { display: none; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section class="left">
+    <div class="intro">
+      <h1>Eight demos written by Claude Fable 5.2 in a single session.</h1>
+      <p>Each one is a single HTML file with no libraries and no downloaded assets. Every pixel and every sound is computed live in the browser.</p>
+    </div>
+    <ol class="reel" id="reel"></ol>
+    <p class="keys"><kbd>1</kbd> to <kbd>8</kbd> pick a demo, <kbd>Enter</kbd> opens it, <kbd>Space</kbd> holds the reel. Inside a demo, <kbd>H</kbd> hides the controls for recording.</p>
+  </section>
+
+  <section class="right">
+    <div class="stage" id="stage">
+      <a class="open-cover" id="cover" href="#" aria-label="Open demo"></a>
+      <span class="live">Running live</span>
+    </div>
+    <div class="about">
+      <p id="blurb"></p>
+      <ul class="facts" id="facts"></ul>
+      <a class="open" id="open" href="#">Open</a>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var DEMOS = [
+    { file: '01-event-horizon', name: 'Event Horizon', accent: '#FFB454', how: 'WebGL fragment shader', lines: 713, kb: 25,
+      blurb: 'A black hole traced ray by ray. Light bends around it the way general relativity says it should, so the far side of the disk arches over the top.' },
+    { file: '02-gambit', name: 'Gambit', accent: '#9AD1B0', how: 'Alpha-beta search in a Web Worker', lines: 1429, kb: 61,
+      blurb: 'A chess engine written from scratch. It searches the game tree while you watch and shows the line it expects to be played.' },
+    { file: '03-pulsefall', name: 'Pulsefall', accent: '#FF4D8D', how: 'Canvas 2D and Web Audio', lines: 1206, kb: 64,
+      blurb: 'A neon arena shooter with waves, bosses and upgrades. It plays itself until you take the controls.' },
+    { file: '04-aurora', name: 'Aurora', accent: '#5CE1E6', how: 'Web Audio synthesis', lines: 1222, kb: 62,
+      blurb: 'A music studio that composes a new track whenever you ask. Every drum and synth is built from raw waveforms.' },
+    { file: '05-synapse', name: 'Synapse', accent: '#A78BFA', how: 'Hand-written backpropagation', lines: 760, kb: 35,
+      blurb: 'A neural network learning in front of you. Watch the boundary between two classes curl itself around a pair of spirals.' },
+    { file: '06-loom', name: 'Loom', accent: '#FFD166', how: 'Verlet physics on canvas', lines: 1205, kb: 67,
+      blurb: 'Cloth you can pull, unpin and slice, running on a physics engine written for this page.' },
+    { file: '07-terraform', name: 'Terraform', accent: '#7CC4FF', how: 'Ray-marched WebGL shader', lines: 552, kb: 22,
+      blurb: 'An endless landscape computed per pixel. Mountains, water, clouds and a full day and night, with no stored geometry.' },
+    { file: '08-fableos', name: 'FableOS', accent: '#F2A7C3', how: 'DOM window manager', lines: 1882, kb: 100,
+      blurb: 'A desktop in a browser tab, with a terminal, a file system, a paint app and windows you can drag around.' }
+  ];
+  var DWELL = 11000;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var reel = document.getElementById('reel');
+  var stage = document.getElementById('stage');
+  var cover = document.getElementById('cover');
+  var blurb = document.getElementById('blurb');
+  var facts = document.getElementById('facts');
+  var open = document.getElementById('open');
+
+  var items = DEMOS.map(function (d, i) {
+    var li = document.createElement('li');
+    li.style.setProperty('--i', i);
+    var b = document.createElement('button');
+    b.type = 'button';
+    var key = document.createElement('span'); key.className = 'key'; key.textContent = i + 1;
+    var nm = document.createElement('span'); nm.textContent = d.name;
+    b.appendChild(key); b.appendChild(nm);
+    var timer = document.createElement('span'); timer.className = 'timer';
+    var bar = document.createElement('i'); timer.appendChild(bar);
+    li.appendChild(b); li.appendChild(timer);
+    reel.appendChild(li);
+    b.addEventListener('click', function () { if (current === i) go(); else { select(i); hold(8000); } });
+    b.addEventListener('mouseenter', function () { if (current !== i) select(i); hold(4000); });
+    b.addEventListener('focus', function () { if (current !== i) select(i); hold(8000); });
+    return { li: li, button: b, bar: bar };
+  });
+
+  var current = -1, frame = null, startedAt = 0, heldUntil = 0, paused = false;
+
+  function url(i, embed) { return 'demos/' + DEMOS[i].file + '.html' + (embed ? '?embed=1' : ''); }
+  function go() { location.href = url(current, false); }
+
+  function fit() {
+    var s = stage.clientWidth / 1280;
+    var frames = stage.querySelectorAll('iframe');
+    for (var k = 0; k < frames.length; k++) frames[k].style.transform = 'scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+
+  function select(i) {
+    i = (i + DEMOS.length) % DEMOS.length;
+    if (i === current) return;
+    current = i;
+    var d = DEMOS[i];
+    document.documentElement.style.setProperty('--accent', d.accent);
+    items.forEach(function (it, k) {
+      it.li.classList.toggle('on', k === i);
+      if (k === i) it.button.setAttribute('aria-current', 'true'); else it.button.removeAttribute('aria-current');
+      it.bar.style.transform = 'scaleX(0)';
+    });
+    blurb.textContent = d.blurb;
+    facts.textContent = '';
+    var list = [d.how];
+    if (d.lines) list.push(d.lines.toLocaleString('en-US') + ' lines');
+    if (d.kb) list.push(d.kb + ' KB');
+    list.push('No dependencies');
+    list.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; facts.appendChild(li); });
+    open.textContent = 'Open ' + d.name;
+    open.href = cover.href = url(i, false);
+    cover.setAttribute('aria-label', 'Open ' + d.name);
+
+    // Swap the live preview: only one demo runs at a time.
+    var old = frame;
+    var f = document.createElement('iframe');
+    f.setAttribute('tabindex', '-1');
+    f.setAttribute('aria-hidden', 'true');
+    f.setAttribute('inert', '');
+    f.title = d.name + ' preview';
+    f.addEventListener('load', function () { setTimeout(function () { f.classList.add('ready'); }, 250); });
+    f.src = url(i, true);
+    stage.insertBefore(f, cover);
+    frame = f;
+    fit();
+    if (old) { old.classList.remove('ready'); setTimeout(function () { old.remove(); }, 520); }
+    startedAt = performance.now();
+  }
+
+  function hold(ms) { heldUntil = Math.max(heldUntil, performance.now() + ms); }
+
+  function tick(now) {
+    if (!reduce && !paused && current >= 0) {
+      if (now < heldUntil) startedAt = now - Math.min(now - startedAt, DWELL * 0.15);
+      var p = (now - startedAt) / DWELL;
+      items[current].bar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, p)) + ')';
+      if (p >= 1) select(current + 1);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key >= '1' && e.key <= String(DEMOS.length)) { select(parseInt(e.key, 10) - 1); hold(8000); }
+    else if (e.key === 'ArrowDown') { select(current + 1); hold(8000); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { select(current - 1); hold(8000); e.preventDefault(); }
+    else if (e.key === 'Enter' && document.activeElement.tagName !== 'A') { go(); }
+    else if (e.key === ' ') { paused = !paused; e.preventDefault(); }
+  });
+
+  // A preview must never keep the keyboard: if one takes focus, take it back.
+  window.addEventListener('blur', function () {
+    setTimeout(function () {
+      if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+        document.activeElement.blur();
+        window.focus();
+      }
+    }, 0);
+  });
+
+  // Coming back from a demo restores the one you were on.
+  var start = 0;
+  try { start = parseInt(sessionStorage.getItem('showcase-demo') || '0', 10) || 0; } catch (err) {}
+  window.addEventListener('pagehide', function () { try { sessionStorage.setItem('showcase-demo', String(current)); } catch (err) {} });
+
+  select(start);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
